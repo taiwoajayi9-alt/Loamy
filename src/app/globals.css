@@ -2,20 +2,121 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Loamy design tokens — "light with characterful black" (Loamy brand skill).
+ * Light warm-grey canvas, white cards, black feature cards with lemon/sage glow, colourful icon tiles.
+ * This is not a dark mode: black is used for feature moments, never as the page background.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* canvas and surfaces */
+  --loamy-canvas: #f3f3f1;
+  --loamy-card: #ffffff;
+  --loamy-border: #ecece8;
+  --loamy-border-strong: #e2e2de;
+  --loamy-divider: #f0f0ec;
+  --loamy-chip: #ededea;
+
+  /* ink */
+  --loamy-black: #0a0a0a;
+  --loamy-muted: #666666;
+  --loamy-muted-on-black: #b5b5b0;
+
+  /* nature accents */
+  --loamy-lemon: #c8e66b;
+  --loamy-lemon-hover: #d6ee85;
+  --loamy-sage: #a7c99a;
+  --loamy-pale-leaf: #e9f2df;
+  --loamy-leaf-ink: #2e4a1e;
+  --loamy-leaf: #5a9a2f;
+
+  /* icon-tile palette */
+  --loamy-peach: #f4b98a;
+  --loamy-sky: #9cc9f5;
+  --loamy-lilac: #c7b6f5;
+
+  /* placeholders and states */
+  --loamy-ph-green: #ddebcb;
+  --loamy-ph-cream: #f6e6c8;
+  --loamy-ph-grey: #e6e6e2;
+  --loamy-error-bg: #fdf1ee;
+  --loamy-error-ink: #7a2716;
+
+  --loamy-radius-card: 24px;
+  --loamy-radius-hero: 28px;
+  --loamy-nav-clearance: 104px;
+
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  background: var(--loamy-canvas);
+  color: var(--loamy-black);
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+:focus-visible {
+  outline: 2px solid var(--loamy-black);
+  outline-offset: 2px;
+}
+
+@layer components {
+  /* Signature black feature card with lemon + sage glow. One per main screen. */
+  .loamy-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--loamy-radius-hero);
+    background: var(--loamy-black);
+    color: #fff;
+  }
+  .loamy-hero::before {
+    content: "";
+    position: absolute;
+    width: 260px;
+    height: 260px;
+    right: -90px;
+    top: -110px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgb(200 230 107 / 0.55) 0%, rgb(200 230 107 / 0) 70%);
+    pointer-events: none;
+  }
+  .loamy-hero::after {
+    content: "";
+    position: absolute;
+    width: 160px;
+    height: 160px;
+    left: -60px;
+    bottom: -80px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgb(167 201 154 / 0.35) 0%, rgb(167 201 154 / 0) 70%);
+    pointer-events: none;
+  }
+  .loamy-hero > * {
+    position: relative;
+  }
+  .loamy-hero :focus-visible {
+    outline-color: var(--loamy-lemon);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
