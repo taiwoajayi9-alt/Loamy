@@ -1,17 +1,14 @@
 /**
  * Business details used in the Terms and Privacy notice.
- * OWNER: replace the bracketed values, have a Nigerian lawyer review both pages, then set `reviewed: true`
+ * OWNER: business name, CAC number and address are left out for now (owner decision 2026-11-03); add them, have a Nigerian lawyer review both pages, then set `reviewed: true`
  * to remove the "draft" banner. Bump POLICY_VERSION in src/server/auth.ts when the wording changes materially.
  */
 export const LEGAL = {
   reviewed: false,
   effective: "3 November 2026",
-  businessName: "[Registered business name]",
-  registration: "[CAC registration number]",
-  address: "[Registered address], Lagos, Nigeria",
   email: "loamy.farm@gmail.com",
   privacyEmail: "loamy.farm@gmail.com",
-  phone: "[Support phone or WhatsApp number]",
+  instagram: "loamy.farm",
   /** Window for reporting a damaged or wrong item. */
   damagedReportHours: 48,
   /** Change-of-mind returns for unused, non-living items. Live plants and seedlings are excluded. */

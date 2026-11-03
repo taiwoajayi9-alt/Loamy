@@ -11,7 +11,7 @@ export default function TermsPage() {
       title="Terms of use"
       intro={
         <p>
-          These terms are the agreement between you and {LEGAL.businessName} (“Loamy”, “we”, “us”) when you use the Loamy app, become a member or buy from the
+          These terms are the agreement between you and Loamy (“we”, “us”) when you use the Loamy app, become a member or buy from the
           Loamy shop. We’ve kept them as plain as we can. By creating an account you agree to them, so please read them, along with our{" "}
           <Link href="/privacy" className="underline">privacy notice</Link>.
         </p>
@@ -19,8 +19,9 @@ export default function TermsPage() {
     >
       <Section n={1} title="Who we are">
         <p>
-          Loamy is run by {LEGAL.businessName} ({LEGAL.registration}), {LEGAL.address}. You can reach us at{" "}
-          <a href={`mailto:${LEGAL.email}`} className="underline">{LEGAL.email}</a> or {LEGAL.phone}.
+          Loamy is a home gardening service based in Lagos, Nigeria. You can reach us by email at{" "}
+          <a href={`mailto:${LEGAL.email}`} className="underline">{LEGAL.email}</a> or on Instagram at{" "}
+          <a href={`https://www.instagram.com/${LEGAL.instagram}/`} target="_blank" rel="noopener noreferrer" className="underline">@{LEGAL.instagram}</a>.
         </p>
       </Section>
 

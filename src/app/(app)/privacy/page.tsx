@@ -27,8 +27,10 @@ export default function PrivacyNoticePage() {
     >
       <Section n={1} title="Who is responsible for your data">
         <p>
-          {LEGAL.businessName} ({LEGAL.registration}), {LEGAL.address}, is the data controller. For anything about your data, email{" "}
-          <a href={`mailto:${LEGAL.privacyEmail}`} className="underline">{LEGAL.privacyEmail}</a>.
+          Loamy, based in Lagos, Nigeria, is the data controller. For anything about your data, email{" "}
+          <a href={`mailto:${LEGAL.privacyEmail}`} className="underline">{LEGAL.privacyEmail}</a>. You can also message us on Instagram at{" "}
+          <a href={`https://www.instagram.com/${LEGAL.instagram}/`} target="_blank" rel="noopener noreferrer" className="underline">@{LEGAL.instagram}</a>, but
+          please don’t share personal details there.
         </p>
       </Section>
 
