@@ -93,3 +93,54 @@ export function parsePlantDraft(text: string): PlantDraft {
   const seen = new Set<PillarType>();
   return { sections: parsed.data.sections.filter((s) => (seen.has(s.type) ? false : (seen.add(s.type), true))) };
 }
+
+// ── Care routine drafts ────────────────────────────────────────
+
+const CARE_TYPES = ["soil_check", "watering", "feeding", "pruning", "repotting", "pest_inspection", "general_inspection", "harvesting", "custom"] as const;
+
+const careTaskSchema = z.object({
+  taskType: z.enum(CARE_TYPES),
+  title: z.string().trim().min(3).max(70),
+  instructions: z.string().trim().min(20).max(600),
+  everyDays: z.number().int().min(1).max(90),
+  startAfterDays: z.number().int().min(0).max(180).default(0),
+});
+const careDraftSchema = z.object({ tasks: z.array(careTaskSchema).min(1).max(8) });
+export type CareDraft = z.infer<typeof careDraftSchema>;
+
+export function buildCareRoutinePrompt(p: PlantDraftInput & { needs?: string }): { system: string; user: string } {
+  const system = [
+    "You write care routines for Loamy, a home gardening app for beginners in Lagos, Nigeria (hot, humid, long rainy season, dry harmattan season).",
+    "A care routine is 3 to 6 repeating tasks for a plant grown in a pot, grow bag or small bed. Each task has a short title, plain instructions (one to three sentences), how often it repeats in days, and how many days after planting it starts.",
+    "Rules:",
+    "- Prefer 'check the soil, then water if dry' over fixed watering. Never tell people to water on a strict timer.",
+    "- Mention the rainy and dry season where it changes what to do.",
+    "- No prices, brands, chemicals or pesticides by name. Suggest gentle options like hand-picking pests or a mild soap spray.",
+    "- No medical claims. If unsure, leave it out: an expert reviews every task.",
+    `- taskType must be one of: ${CARE_TYPES.join(", ")}.`,
+    'Reply with JSON only: {"tasks":[{"taskType":"soil_check","title":"...","instructions":"...","everyDays":1,"startAfterDays":0}]}',
+  ].join("\n");
+  const facts = [
+    `Plant: ${p.commonName}`,
+    p.botanicalName ? `Botanical name: ${p.botanicalName}` : null,
+    p.localNames.length ? `Local names: ${p.localNames.join(", ")}` : null,
+    `Category: ${p.category}`,
+    p.needs ? `Growing needs: ${p.needs}` : null,
+  ].filter(Boolean);
+  return { system, user: `${facts.join("\n")}\n\nWrite the care routine.` };
+}
+
+export function parseCareRoutine(text: string): CareDraft {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) throw new Error("The AI reply had no care routine in it. Try again.");
+  let json: unknown;
+  try {
+    json = JSON.parse(text.slice(start, end + 1));
+  } catch {
+    throw new Error("The AI reply wasn't readable. Try again.");
+  }
+  const parsed = careDraftSchema.safeParse(json);
+  if (!parsed.success) throw new Error("The AI care routine wasn't in the right shape. Try again.");
+  return parsed.data;
+}

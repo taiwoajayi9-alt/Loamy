@@ -5,6 +5,7 @@ import { db } from "@/db/client";
 import {
   adminRoleAssignments,
   auditLogs,
+  careTaskTemplates,
   plantCategories,
   plantContentSections,
   plantReferences,
@@ -125,7 +126,9 @@ export async function getAdminPlant(id: string) {
       .where(eq(plantContentSections.plantId, id)),
   ]);
   const sourceCount = new Set(refs.map((r) => r.sourceId)).size;
-  return { plant, categories, sections, refs, readiness: publishReadiness(sections, sourceCount) };
+  const care = await getCareTemplates(id);
+  const approvedCare = care.filter((c) => c.reviewStatus === "approved" && c.status === "published").length;
+  return { plant, categories, sections, refs, care, readiness: publishReadiness(sections, sourceCount, approvedCare) };
 }
 
 /** Latest "changes requested" note per section, so the writer sees what the expert asked for. */
@@ -392,4 +395,79 @@ export async function setPlantPublished(actor: Actor, plantId: string, publish: 
 
 function pick(obj: Record<string, unknown>, keys: string[]) {
   return Object.fromEntries(keys.map((k) => [k, obj[k]]));
+}
+
+// ── Care routine (reviewed templates the care engine turns into members' daily tasks) ──
+
+export type CareInput = { taskType: string; title: string; instructions: string; everyDays: number; startAfterDays: number };
+
+export async function getCareTemplates(plantId: string) {
+  return db
+    .select()
+    .from(careTaskTemplates)
+    .where(and(eq(careTaskTemplates.plantId, plantId), sql`${careTaskTemplates.status} <> 'archived'`))
+    .orderBy(asc(careTaskTemplates.createdAt));
+}
+
+async function careRow(tx: Tx, plantId: string, id: string) {
+  const [row] = await tx.select().from(careTaskTemplates).where(and(eq(careTaskTemplates.id, id), eq(careTaskTemplates.plantId, plantId))).for("update");
+  assert(Boolean(row), "Care task not found.", WorkflowError);
+  return row!;
+}
+
+const careValues = (c: CareInput) => ({
+  taskType: c.taskType as typeof careTaskTemplates.$inferInsert.taskType,
+  title: c.title,
+  instructions: c.instructions,
+  timingRule: { everyDays: c.everyDays, startAfterDays: c.startAfterDays },
+});
+
+export async function addCareTemplate(actor: Actor, plantId: string, c: CareInput) {
+  assert(canEditPlants(actor.roles), "You don't have permission to edit plants.");
+  await db.transaction(async (tx) => {
+    const [row] = await tx.insert(careTaskTemplates).values({ plantId, ...careValues(c), reviewStatus: "pending", status: "draft" }).returning({ id: careTaskTemplates.id });
+    await audit(tx, actor, "care_template.add", "care_task_template", row.id, null, c);
+  });
+}
+
+/** Drafts can be edited freely. Approved tasks are retired and replaced instead, so members' schedules stay stable. */
+export async function updateCareTemplate(actor: Actor, plantId: string, id: string, c: CareInput) {
+  assert(canEditPlants(actor.roles), "You don't have permission to edit plants.");
+  await db.transaction(async (tx) => {
+    const row = await careRow(tx, plantId, id);
+    assert(row.reviewStatus !== "approved", "This task is approved and in use. Add a new task, then retire this one.", WorkflowError);
+    await tx.update(careTaskTemplates).set({ ...careValues(c), reviewStatus: "pending", status: "draft" }).where(eq(careTaskTemplates.id, id));
+    await audit(tx, actor, "care_template.update", "care_task_template", id, { title: row.title, timingRule: row.timingRule }, c);
+  });
+}
+
+export async function reviewCareTemplate(actor: Actor, plantId: string, id: string, approve: boolean, note: string | null) {
+  assert(canApprovePlants(actor.roles), "Only a plant expert can review content.");
+  await db.transaction(async (tx) => {
+    const row = await careRow(tx, plantId, id);
+    assert(row.reviewStatus !== "approved", "This task is already approved.", WorkflowError);
+    await tx
+      .update(careTaskTemplates)
+      .set(approve ? { reviewStatus: "approved", status: "published" } : { reviewStatus: "rejected", status: "draft" })
+      .where(eq(careTaskTemplates.id, id));
+    await audit(tx, actor, approve ? "care_template.approve" : "care_template.request_changes", "care_task_template", id, null, { note });
+  });
+}
+
+/** Removes a task from new and existing schedules. History is kept. */
+export async function retireCareTemplate(actor: Actor, plantId: string, id: string) {
+  assert(canEditPlants(actor.roles) || canApprovePlants(actor.roles), "You don't have permission to edit plants.");
+  await db.transaction(async (tx) => {
+    await careRow(tx, plantId, id);
+    await tx.update(careTaskTemplates).set({ status: "archived" }).where(eq(careTaskTemplates.id, id));
+    await audit(tx, actor, "care_template.retire", "care_task_template", id, null, null);
+  });
+}
+
+export async function applyAiCareDraft(actor: Actor, plantId: string, tasks: CareInput[]) {
+  assert(canEditPlants(actor.roles), "You don't have permission to edit plants.");
+  await db.transaction(async (tx) => {
+    for (const c of tasks) await tx.insert(careTaskTemplates).values({ plantId, ...careValues(c), reviewStatus: "pending", status: "draft" });
+    await audit(tx, actor, "care_template.ai_draft", "plant", plantId, null, { count: tasks.length });
+  });
 }

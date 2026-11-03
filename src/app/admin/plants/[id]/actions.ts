@@ -4,9 +4,15 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { PILLAR_TYPES, type PillarType } from "@/lib/plant-workflow";
-import { aiDraftConfigured, draftPlantSections } from "@/server/ai/plant-draft";
+import { LAUNCH_PLANTS } from "@/db/launch-catalogue";
+import { aiDraftConfigured, draftCareRoutine, draftPlantSections } from "@/server/ai/plant-draft";
 import {
+  addCareTemplate,
   addSource,
+  applyAiCareDraft,
+  retireCareTemplate,
+  reviewCareTemplate,
+  updateCareTemplate,
   applyAiDraft,
   getAdminPlant,
   NotAllowed,
@@ -173,5 +179,73 @@ export async function publishAction(form: FormData) {
   await run(plantId, "publish", async () => {
     await setPlantPublished(actor, plantId, publish);
     return publish ? "Published. It's now live on Discover." : "Unpublished. It's hidden from customers.";
+  });
+}
+
+// ── Care routine ───────────────────────────────────────────────
+
+const careSchema = z.object({
+  taskType: z.enum(["soil_check", "watering", "feeding", "pruning", "repotting", "pest_inspection", "general_inspection", "harvesting", "custom"]),
+  title: z.string().trim().min(3, "Give the task a short title.").max(70),
+  instructions: z.string().trim().min(20, "Explain the task in a sentence or two.").max(600),
+  everyDays: z.coerce.number({ invalid_type_error: "How often, in days?" }).int().min(1, "At least every 1 day.").max(365),
+  startAfterDays: z.coerce.number().int().min(0).max(365).catch(0),
+});
+
+export async function saveCareAction(form: FormData) {
+  const plantId = uuid.parse(form.get("plantId"));
+  const actor = await requirePlantLibrary(`/admin/plants/${plantId}`);
+  await run(plantId, "care", async () => {
+    const input = careSchema.parse(Object.fromEntries(form));
+    const id = form.get("careId");
+    if (id) {
+      await updateCareTemplate(actor, plantId, uuid.parse(id), input);
+      return "Care task saved. It needs approval before members see it.";
+    }
+    await addCareTemplate(actor, plantId, input);
+    return "Care task added. It needs approval before members see it.";
+  });
+}
+
+export async function reviewCareAction(form: FormData) {
+  const plantId = uuid.parse(form.get("plantId"));
+  const actor = await requirePlantLibrary(`/admin/plants/${plantId}`);
+  await run(plantId, "care", async () => {
+    const approve = form.get("decision") === "approve";
+    const note = optText(500).parse(form.get("note") ?? "");
+    if (!approve && !note) throw new WorkflowError("Say what needs changing, so the writer knows what to fix.");
+    await reviewCareTemplate(actor, plantId, uuid.parse(form.get("careId")), approve, note);
+    return approve ? "Care task approved." : "Sent back with your notes.";
+  });
+}
+
+export async function retireCareAction(form: FormData) {
+  const plantId = uuid.parse(form.get("plantId"));
+  const actor = await requirePlantLibrary(`/admin/plants/${plantId}`);
+  await run(plantId, "care", async () => {
+    await retireCareTemplate(actor, plantId, uuid.parse(form.get("careId")));
+    return "Care task retired. Members won't get it from now on.";
+  });
+}
+
+export async function aiCareDraftAction(form: FormData) {
+  const plantId = uuid.parse(form.get("plantId"));
+  const actor = await requirePlantLibrary(`/admin/plants/${plantId}`);
+  await run(plantId, "care", async () => {
+    if (!aiDraftConfigured()) throw new WorkflowError("AI drafting is off. Add a Gemini or DeepSeek key to .env.local to turn it on.");
+    const data = await getAdminPlant(plantId);
+    if (!data) throw new WorkflowError("Plant not found.");
+    const category = data.categories.find((c) => c.id === data.plant.categoryId)?.name ?? "Plant";
+    const needs = LAUNCH_PLANTS.find((p) => p.slug === data.plant.slug)?.needs;
+    const draft = await draftCareRoutine({
+      commonName: data.plant.commonName,
+      botanicalName: data.plant.botanicalName,
+      localNames: data.plant.localNames,
+      category,
+      tagline: data.plant.tagline,
+      needs: needs ? `sun ${needs.sun}, container ${needs.container}, water ${needs.water}${needs.climbs ? ", climbs" : ""}` : undefined,
+    });
+    await applyAiCareDraft(actor, plantId, draft.tasks);
+    return `AI drafted ${draft.tasks.length} care tasks. Read each one before approving.`;
   });
 }

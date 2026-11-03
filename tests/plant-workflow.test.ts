@@ -81,6 +81,11 @@ describe("publishing", () => {
     expect(r.ready).toBe(false);
     expect(r.missing[0]).toContain("Meet the plant");
   });
+
+  it("needs an approved care task when the care routine is checked", () => {
+    expect(publishReadiness(allApproved, 1, 0)).toEqual({ ready: false, missing: ["Approve at least one care task"] });
+    expect(publishReadiness(allApproved, 1, 2).ready).toBe(true);
+  });
 });
 
 describe("roles", () => {

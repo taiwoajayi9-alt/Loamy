@@ -27,6 +27,7 @@ import {
   saveBasicsAction,
   saveSectionAction,
 } from "./actions";
+import { CareRoutine } from "./care-routine";
 
 export const metadata: Metadata = { title: "Edit plant" };
 export const dynamic = "force-dynamic";
@@ -57,7 +58,7 @@ export default async function EditPlant({
   const data = await getAdminPlant(id);
   if (!data) notFound();
 
-  const { plant, categories, sections, refs, readiness } = data;
+  const { plant, categories, sections, refs, care, readiness } = data;
   const latest = latestByType(sections);
   const live = approvedByType(sections);
   const notes = await getReviewNotes([...latest.values()].map((s) => s.id));
@@ -269,6 +270,8 @@ export default async function EditPlant({
           </Card>
         );
       })}
+
+      <CareRoutine plantId={plant.id} care={care} mayEdit={mayEdit} mayApprove={mayApprove} aiOn={aiOn} />
 
       {/* ── Publish ── */}
       <Card className="flex flex-col gap-3 p-5">

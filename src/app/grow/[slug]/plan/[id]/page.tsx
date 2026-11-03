@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { z } from "zod";
+import { addToGardenAction } from "@/app/(app)/garden/actions";
 import { TrackEvent } from "@/components/analytics";
+import { SubmitButton } from "@/components/submit-button";
 import { ButtonLink, Card, HeroCard, Icon, Page, Tag } from "@/components/ui";
 import { answerLabel, type Answers } from "@/lib/grow/questions";
 import { OUTCOME_HEADLINE, type Outcome } from "@/lib/grow/suitability";
@@ -136,7 +138,10 @@ export default async function PlanPreview({ params }: { params: Promise<{ slug: 
             ))}
           </ul>
           {subscribed ? (
-            <ButtonLink href="/garden" full>Add to my garden</ButtonLink>
+            <form action={addToGardenAction}>
+              <input type="hidden" name="planId" value={id} />
+              <SubmitButton full size="md" pendingLabel="Adding…">Add to my garden</SubmitButton>
+            </form>
           ) : user ? (
             <ButtonLink href={next} full>Unlock my full plan</ButtonLink>
           ) : (

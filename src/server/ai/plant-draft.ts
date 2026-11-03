@@ -1,5 +1,15 @@
 import "server-only";
-import { aiDraftConfigured, aiDraftProvider, buildPlantDraftPrompt, parsePlantDraft, type PlantDraftInput, type PlantDraft } from "@/lib/ai/plant-draft";
+import {
+  aiDraftConfigured,
+  aiDraftProvider,
+  buildCareRoutinePrompt,
+  buildPlantDraftPrompt,
+  parseCareRoutine,
+  parsePlantDraft,
+  type CareDraft,
+  type PlantDraftInput,
+  type PlantDraft,
+} from "@/lib/ai/plant-draft";
 
 export { aiDraftConfigured, aiDraftProvider };
 
@@ -10,6 +20,17 @@ export { aiDraftConfigured, aiDraftProvider };
  */
 export async function draftPlantSections(input: PlantDraftInput): Promise<PlantDraft> {
   const { system, user } = buildPlantDraftPrompt(input);
+  return parsePlantDraft(await complete(system, user));
+}
+
+/** Asks the AI for a care routine (repeating tasks). Saved as unreviewed drafts. */
+export async function draftCareRoutine(input: PlantDraftInput & { needs?: string }): Promise<CareDraft> {
+  const { system, user } = buildCareRoutinePrompt(input);
+  return parseCareRoutine(await complete(system, user));
+}
+
+/** Sends a prompt to whichever AI provider is configured and returns its text reply. */
+async function complete(system: string, user: string): Promise<string> {
   const provider = aiDraftProvider();
   const model = process.env.AI_DRAFT_MODEL;
   if (provider === "gemini") {
@@ -17,16 +38,14 @@ export async function draftPlantSections(input: PlantDraftInput): Promise<PlantD
     const models = model ? [model] : ["gemini-flash-latest", "gemini-flash-lite-latest"];
     const call = (m: string) =>
       callOpenAiCompatible("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", process.env.GEMINI_API_KEY!, m, system, user, {
-        // Gemini Flash "thinks" before answering; keep that short so the six sections fit in the reply.
+        // Gemini Flash "thinks" before answering; keep that short so the whole draft fits in the reply.
         reasoning_effort: "low",
       });
-    return parsePlantDraft(await withRetries(models, call));
+    return withRetries(models, call);
   }
   if (provider === "deepseek")
-    return parsePlantDraft(
-      await callOpenAiCompatible("DeepSeek", "https://api.deepseek.com/chat/completions", process.env.DEEPSEEK_API_KEY!, model || "deepseek-v4-pro", system, user),
-    );
-  if (provider === "anthropic") return parsePlantDraft(await callAnthropic(model || "claude-sonnet-5-5", system, user));
+    return callOpenAiCompatible("DeepSeek", "https://api.deepseek.com/chat/completions", process.env.DEEPSEEK_API_KEY!, model || "deepseek-v4-pro", system, user);
+  if (provider === "anthropic") return callAnthropic(model || "claude-sonnet-5-5", system, user);
   throw new Error("AI drafting is off. Add GEMINI_API_KEY (free) or DEEPSEEK_API_KEY to turn it on.");
 }
 

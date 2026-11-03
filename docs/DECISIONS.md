@@ -107,3 +107,10 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - The app runs on Namecheap's "Setup Node.js App" (Passenger) with Node 22.23.4, from a Next.js standalone bundle in ~/loamy-app/app with deploy/app.js as the startup file.
 - GitHub Actions builds and sends each version over SSH (port 21098) after CI passes, swapping folders so the live app is never half-updated. Secrets live only in ~/loamy-app/.env on the server (sent with scripts/push-env.sh), never in Git.
 - Database, auth and photos stay on Supabase.
+
+## 2026-11-03 — My Garden and care routines
+- Each plant has a care routine: repeating tasks (type, title, instructions, every N days, starting N days after planting). AI can draft them; only expert-approved tasks reach members. Approved tasks can't be edited, only retired and replaced, so members' schedules stay stable.
+- Publishing a plant now also needs at least one approved care task.
+- Members add a plan to their garden (first garden created from their answers). Tasks are worked out each day in Lagos time; missed occurrences fold into one task rather than piling up. Done logs an activity; Skip doesn't.
+- Paying for a membership puts the plan they just unlocked straight into their garden.
+- Members record care, milestones, harvests and growth stage; finishing a plant keeps its history.

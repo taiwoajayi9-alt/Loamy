@@ -94,10 +94,12 @@ export function canReview(latest: SectionVersion | undefined): boolean {
 
 export type Readiness = { ready: boolean; missing: string[] };
 
-export function publishReadiness(rows: SectionVersion[], sourceCount: number): Readiness {
+/** `approvedCareTasks` is checked when given: members need at least one approved care task to follow. */
+export function publishReadiness(rows: SectionVersion[], sourceCount: number, approvedCareTasks?: number): Readiness {
   const approved = approvedByType(rows);
   const missing: string[] = PILLARS.filter((p) => !approved.has(p.type)).map((p) => `"${p.label}" needs an approved version`);
   if (sourceCount < 1) missing.push("Add at least one source");
+  if (approvedCareTasks !== undefined && approvedCareTasks < 1) missing.push("Approve at least one care task");
   return { ready: missing.length === 0, missing };
 }
 
