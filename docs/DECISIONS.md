@@ -162,3 +162,5 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - **Saved plants:** heart on plant pages (visitors are asked to sign in), "Saved" chip in Discover, link in Profile.
 - **Search:** Discover searches common, local (Yoruba/Igbo/Hausa), botanical and category names; the welcome card hides while searching. The shop searches names, descriptions, categories and linked plants.
 - **Refunds:** Shop managers refund all or part of an order's item total from the order page via Paystack (delivery fee is collected separately, so not refunded here). Order row is locked while recording, so no double refunds. A full refund of an undelivered order can put items back in stock and cancels delivery. Paystack's later refund.processed / refund.failed webhooks update the record; the customer is emailed.
+
+- **Launch scope (owner decision 2026-11-04):** go live with only plants and products that are fully approved and complete; the rest stay hidden as drafts and are approved after launch.
