@@ -136,3 +136,5 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - Opening the app (and logging in without a destination) takes members to My Garden; visitors to Discover. The installed app starts at "/".
 - My Garden for free accounts shows their saved plans; for lapsed members it says their garden is saved and offers renewal.
 - "Ready to plant" no longer lists plants already growing. Profile rows go to real pages only. A plan made before sign-up is claimed via the sign-up link even if email is confirmed in another browser.
+- Privacy choice is now a slim strip at the top of the page, in the normal flow, so it never covers buttons or the nav.
+- The plant library shows each draft plant's launch checklist (sections, care routine, source, photo) and "Ready to publish".

@@ -25,7 +25,7 @@ export default async function AdminPlants({ searchParams }: { searchParams: Prom
       <div className="flex flex-col gap-1">
         <h1 className="text-title">Plant library</h1>
         <p className="text-ink-muted">
-          {live} of {rows.length} live · {waiting} section{waiting === 1 ? "" : "s"} waiting for review
+          {live} of {rows.length} live · {rows.filter((r) => r.ready && r.status !== "published").length} ready to publish · {waiting} section{waiting === 1 ? "" : "s"} waiting for review
         </p>
       </div>
 
@@ -93,17 +93,30 @@ export default async function AdminPlants({ searchParams }: { searchParams: Prom
           {rows.map((p) => (
             <li key={p.id}>
               <Link href={`/admin/plants/${p.id}`}>
-                <Card className="flex flex-wrap items-center gap-3 p-4 hover:border-line-strong">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold">{p.commonName}</p>
-                    <p className="text-small text-ink-muted">{p.category}</p>
+                <Card className="flex flex-col gap-2.5 p-4 hover:border-line-strong">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold">{p.commonName}</p>
+                      <p className="text-small text-ink-muted">{p.category}</p>
+                    </div>
+                    {p.inReview ? <Tag tone="lemon">{p.inReview} to review</Tag> : null}
+                    {p.isSample ? <Tag tone="grey">Sample</Tag> : null}
+                    <Tag tone={p.status === "published" ? "leaf" : p.ready ? "lemon" : "grey"}>{p.status === "published" ? "Live" : p.ready ? "Ready to publish" : "Draft"}</Tag>
                   </div>
-                  <span className="text-small tabular-nums text-ink-muted" aria-label={`${p.approved} of ${PILLARS.length} sections approved`}>
-                    {p.approved}/{PILLARS.length} approved
-                  </span>
-                  {p.inReview ? <Tag tone="lemon">{p.inReview} to review</Tag> : null}
-                  {p.isSample ? <Tag tone="grey">Sample</Tag> : null}
-                  <Tag tone={p.status === "published" ? "leaf" : "grey"}>{p.status === "published" ? "Live" : "Draft"}</Tag>
+                  {p.status !== "published" ? (
+                    <ul className="flex flex-wrap gap-1.5 text-xs" aria-label="What's left before publishing">
+                      {[
+                        { ok: p.approved === PILLARS.length, label: `Sections ${p.approved}/${PILLARS.length}` },
+                        { ok: p.care > 0, label: p.care ? `Care ${p.care}` : "Care routine" },
+                        { ok: p.sources > 0, label: p.sources ? `Sources ${p.sources}` : "Source" },
+                        { ok: p.photos > 0, label: p.photos ? `Photos ${p.photos}` : "Photo (recommended)" },
+                      ].map((c) => (
+                        <li key={c.label} className={c.ok ? "rounded-full bg-leaf-pale px-2.5 py-1 font-semibold text-leaf-ink" : "rounded-full border border-line-strong px-2.5 py-1 text-ink-muted"}>
+                          {c.ok ? "✓ " : ""}{c.label}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </Card>
               </Link>
             </li>

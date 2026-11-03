@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ANON_ID_COOKIE, CONSENT_COOKIE, type EventName, type EventProps } from "@/lib/analytics/events";
-import { Button } from "./ui";
 
 const YEAR = 60 * 60 * 24 * 365;
 
@@ -63,25 +62,20 @@ export function AnalyticsConsent() {
     setOpen(false);
   };
 
+  // A slim strip at the top of the page, in the normal flow: it never covers buttons or the nav.
   return (
-    <div
-      role="region"
-      aria-label="Analytics choice"
-      className="fixed inset-x-0 z-50 mx-auto max-w-[560px] px-3"
-      style={{ bottom: "calc(96px + env(safe-area-inset-bottom, 0px))" }}
-    >
-      <div className="flex flex-col gap-3 rounded-[22px] border border-line bg-card p-4 shadow-nav">
-        <p className="text-small">
-          <span className="font-semibold">Help us grow Loamy.</span> May we count anonymous visits, like which plants
-          people look at, to decide what to add next? No ads, and we never sell your data.
+    <div role="region" aria-label="Analytics choice" className="border-b border-line bg-card">
+      <div className="mx-auto flex w-full max-w-[560px] flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
+        <p className="min-w-0 flex-1 text-xs leading-snug text-ink-muted">
+          <span className="font-semibold text-ink">Help us grow Loamy:</span> may we count anonymous visits? No ads, never sold.
         </p>
-        <div className="flex gap-2">
-          <Button size="sm" onClick={() => choose(true)}>
+        <div className="flex flex-none gap-1.5">
+          <button type="button" onClick={() => choose(true)} className="min-h-[36px] rounded-full bg-ink px-3.5 text-xs font-semibold text-white">
             Allow
-          </Button>
-          <Button size="sm" variant="secondary" onClick={() => choose(false)}>
+          </button>
+          <button type="button" onClick={() => choose(false)} className="min-h-[36px] rounded-full border border-line-strong px-3.5 text-xs font-semibold">
             No thanks
-          </Button>
+          </button>
         </div>
       </div>
     </div>

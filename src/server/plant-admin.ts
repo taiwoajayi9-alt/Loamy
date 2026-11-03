@@ -91,7 +91,32 @@ export async function listAdminPlants() {
         .where(inArray(plantContentSections.plantId, ids))
     : [];
 
+  const [refCounts, careCounts, imageCounts] = ids.length
+    ? await Promise.all([
+        db
+          .select({ plantId: plantContentSections.plantId, n: sql<number>`count(distinct ${plantReferences.sourceId})`.mapWith(Number) })
+          .from(plantReferences)
+          .innerJoin(plantContentSections, eq(plantContentSections.id, plantReferences.contentSectionId))
+          .where(inArray(plantContentSections.plantId, ids))
+          .groupBy(plantContentSections.plantId),
+        db
+          .select({ plantId: careTaskTemplates.plantId, n: sql<number>`count(*)`.mapWith(Number) })
+          .from(careTaskTemplates)
+          .where(and(inArray(careTaskTemplates.plantId, ids), eq(careTaskTemplates.reviewStatus, "approved"), eq(careTaskTemplates.status, "published")))
+          .groupBy(careTaskTemplates.plantId),
+        db
+          .select({ plantId: plantImages.plantId, n: sql<number>`count(*)`.mapWith(Number) })
+          .from(plantImages)
+          .where(inArray(plantImages.plantId, ids))
+          .groupBy(plantImages.plantId),
+      ])
+    : [[], [], []];
+  const count = (list: { plantId: string; n: number }[], id: string) => list.find((x) => x.plantId === id)?.n ?? 0;
+
   return rows.map((r) => {
+    const sources = count(refCounts, r.id);
+    const care = count(careCounts, r.id);
+    const photos = count(imageCounts, r.id);
     const latest = latestByType(sections.filter((s) => s.plantId === r.id));
     const states = [...latest.values()];
     return {
@@ -99,6 +124,10 @@ export async function listAdminPlants() {
       approved: states.filter((s) => s.reviewStatus === "approved").length,
       inReview: states.filter((s) => s.status === "in_review" && s.reviewStatus === "pending").length,
       drafts: states.filter((s) => s.status === "draft" && s.reviewStatus === "pending").length,
+      sources,
+      care,
+      photos,
+      ready: publishReadiness(sections.filter((s) => s.plantId === r.id), sources, care).ready,
       started: states.length,
     };
   });
