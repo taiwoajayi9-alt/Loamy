@@ -9,8 +9,8 @@ export const LEGAL = {
   businessName: "[Registered business name]",
   registration: "[CAC registration number]",
   address: "[Registered address], Lagos, Nigeria",
-  email: "hello@loamy.farm",
-  privacyEmail: "privacy@loamy.farm",
+  email: "loamy.farm@gmail.com",
+  privacyEmail: "loamy.farm@gmail.com",
   phone: "[Support phone or WhatsApp number]",
   /** Window for reporting a damaged or wrong item. */
   damagedReportHours: 48,
