@@ -13,6 +13,7 @@ import {
 import { accessUntil, addPeriod, chargeMatches, paymentReference, paystackInterval } from "@/lib/billing";
 import { entitlementsForSet } from "./entitlements";
 import { trackServer } from "./analytics";
+import { confirmOrderPayment } from "./checkout";
 import { paystack, PaystackError } from "./paystack";
 import type { SessionUser } from "./auth";
 
@@ -160,6 +161,7 @@ export async function handlePaystackEvent(evt: WebhookEvent, payloadHash: string
     if (evt.event === "charge.success" && evt.data.reference) {
       const ours = await db.query.paymentTransactions.findFirst({ where: eq(paymentTransactions.reference, String(evt.data.reference)) });
       if (ours?.purpose === "subscription") status = (await confirmSubscriptionPayment(ours.reference)).ok ? "processed" : "failed";
+      else if (ours?.purpose === "order") status = (await confirmOrderPayment(ours.reference)).ok ? "processed" : "failed";
       else if (!ours) status = await applyRenewal(evt.data as Parameters<typeof applyRenewal>[0]);
     } else if (evt.event === "subscription.create" || evt.event === "subscription.not_renew" || evt.event === "subscription.disable") {
       status = await syncSubscriptionEvent(evt);

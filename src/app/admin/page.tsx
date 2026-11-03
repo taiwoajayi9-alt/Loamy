@@ -15,6 +15,8 @@ export default async function AdminHome() {
   const areas: { href: string; title: string; body: string; icon: IconName; colour: TileColour; allowed: boolean }[] = [
     { href: "/admin/plants", title: "Plant library", body: "Write, review and publish plant profiles.", icon: "sprout", colour: "sage", allowed: canOpenPlantLibrary(roles) },
     { href: "/admin/products", title: "Shop items", body: "Prices, stock, photos and publishing.", icon: "bag", colour: "peach", allowed: canManageShop(roles) },
+    { href: "/admin/orders", title: "Orders", body: "Call customers, arrange and track delivery.", icon: "check", colour: "lemon", allowed: canManageShop(roles) },
+    { href: "/admin/promos", title: "Promo codes", body: "Create and switch off discount codes.", icon: "heart", colour: "lilac", allowed: canManageShop(roles) },
   ];
   const mine = areas.filter((a) => a.allowed);
   if (!mine.length) redirect("/");

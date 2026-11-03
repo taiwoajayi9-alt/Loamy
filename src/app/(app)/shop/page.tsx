@@ -2,17 +2,22 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { TrackEvent } from "@/components/analytics";
-import { Card, EmptyState, HeroCard, Icon, Page, PhotoPlaceholder, Tag } from "@/components/ui";
+import { ButtonLink, Card, EmptyState, FormNotice, HeroCard, Page, PhotoPlaceholder, Tag } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/money";
 import { publicImageUrl } from "@/lib/product-admin";
+import { AddToCart } from "@/components/add-to-cart";
+import { getSessionUser } from "@/server/auth";
+import { cartCount } from "@/server/cart";
 import { listProductCategories, listPublishedProducts } from "@/server/catalogue";
 
 export const metadata: Metadata = { title: "Shop" };
 export const dynamic = "force-dynamic";
 
-export default async function ShopPage({ searchParams }: { searchParams: Promise<{ category?: string }> }) {
-  const { category } = await searchParams;
+export default async function ShopPage({ searchParams }: { searchParams: Promise<{ category?: string; added?: string; error?: string }> }) {
+  const { category, added, error } = await searchParams;
+  const user = await getSessionUser();
+  const inCart = await cartCount(user?.id ?? null).catch(() => 0);
   const [productsRes, catsRes] = await Promise.all([listPublishedProducts({ category }), listProductCategories()]);
   const items = productsRes.ok ? productsRes.data : [];
   const cats = catsRes.ok ? catsRes.data : [];
@@ -27,6 +32,14 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
         <h1 className="text-title">Everything to start growing.</h1>
         <p className="text-ink-on-black">Picked by Loamy, delivered within Lagos. No subscription needed.</p>
       </HeroCard>
+
+      {added ? <FormNotice tone="success">Added to your cart.</FormNotice> : null}
+      {error ? <FormNotice tone="error">{error}</FormNotice> : null}
+      {inCart > 0 ? (
+        <ButtonLink href="/cart" variant="lime" full>
+          View cart · {inCart} item{inCart === 1 ? "" : "s"}
+        </ButtonLink>
+      ) : null}
 
       {cats.length ? (
         <nav aria-label="Product categories" className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
@@ -59,7 +72,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
             const soldOut = p.stock <= 0;
             return (
               <li key={p.slug}>
-                <Card className="flex items-center gap-3.5 p-3">
+                <Card className="relative flex items-center gap-3.5 p-3">
                   {p.coverPath && supabaseUrl ? (
                     <img
                       src={publicImageUrl(supabaseUrl, p.coverPath)}
@@ -71,19 +84,13 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
                     <PhotoPlaceholder label="product" tone="grey" caption="none" className="h-[88px] w-[88px] flex-none rounded-xl" />
                   )}
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <p className="font-semibold">{p.name}</p>
+                    <Link href={`/shop/${p.slug}`} className="font-semibold after:absolute after:inset-0">{p.name}</Link>
                     <p className="text-small text-ink-muted">{p.category}</p>
                     <p className="font-semibold tabular-nums">{formatNaira(p.fromPriceMinor)}</p>
-                    {soldOut ? <p className="text-small font-medium text-danger-ink">Sold out</p> : null}
                   </div>
-                  <button
-                    type="button"
-                    disabled
-                    aria-label={`Add ${p.name} to cart (cart arrives in Phase 4)`}
-                    className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-ink text-white disabled:opacity-40"
-                  >
-                    <Icon name="plus" size={20} />
-                  </button>
+                  <div className="relative z-10 flex-none">
+                    <AddToCart slug={p.slug} back={category ? `/shop?category=${category}` : "/shop"} soldOut={soldOut} label="Add" />
+                  </div>
                 </Card>
               </li>
             );

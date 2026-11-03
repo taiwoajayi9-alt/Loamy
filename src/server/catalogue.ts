@@ -161,3 +161,34 @@ export function getPublishedSections(plantId: string) {
     return { sections, sources };
   });
 }
+
+/** One published product with its photos, price and live stock, for the product page. */
+export function getPublishedProduct(slug: string) {
+  return load(async () => {
+    const [row] = await db
+      .select({
+        id: products.id,
+        slug: products.slug,
+        name: products.name,
+        description: products.description,
+        isSample: products.isSample,
+        category: productCategories.name,
+        priceMinor: min(productVariants.priceMinor).mapWith(Number),
+        stock: sql<number>`coalesce(sum(${inventoryRecords.quantityAvailable} - ${inventoryRecords.reservedQuantity}), 0)`.mapWith(Number),
+      })
+      .from(products)
+      .innerJoin(productCategories, eq(productCategories.id, products.categoryId))
+      .innerJoin(productVariants, and(eq(productVariants.productId, products.id), eq(productVariants.status, "published")))
+      .leftJoin(inventoryRecords, eq(inventoryRecords.variantId, productVariants.id))
+      .where(and(eq(products.slug, slug), eq(products.status, "published")))
+      .groupBy(products.id, productCategories.name)
+      .limit(1);
+    if (!row) return null;
+    const images = await db
+      .select({ path: productImages.storagePath, alt: productImages.altText })
+      .from(productImages)
+      .where(eq(productImages.productId, row.id))
+      .orderBy(asc(productImages.sortOrder), asc(productImages.createdAt));
+    return { ...row, images };
+  });
+}

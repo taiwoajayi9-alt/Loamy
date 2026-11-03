@@ -95,3 +95,9 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - Renewals, subscription codes and cancellations arrive by webhook (signature-checked, each event handled once). Webhooks need a public URL, so they start working once the app is deployed.
 - Cancelling stops renewal at Paystack; access continues until the end of the paid period, plus 3 days' grace on late renewals.
 - Live keys and real charges need the owner's go-ahead.
+
+## 2026-11-03 — Cart, checkout and orders
+- Visitors can fill a cart; it moves into their account when they sign in. Checkout needs an account plus a Nigerian mobile number and a Lagos address (saved for next time).
+- Prices and stock are re-read and locked at checkout. Placing an order holds the stock for 30 minutes while the shopper pays; unpaid holds are released. A payment that arrives after the hold still counts and is flagged for a stock check.
+- Customers pay for items only (promo codes applied server-side). Paystack is re-verified on the server before an order counts as paid; replays are ignored.
+- Admin: Orders screen (call the customer, set status, agreed delivery fee, date and notes; every change logged) and Promo codes screen. Promo codes apply to the shop now; membership promos later.

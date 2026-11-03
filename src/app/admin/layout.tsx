@@ -13,9 +13,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Wordmark />
           </Link>
           <span className="rounded-full bg-ink px-2.5 py-1 text-xs font-semibold text-lemon">Admin</span>
-          <nav className="ml-auto flex gap-4 text-small font-semibold">
+          <nav className="ml-auto flex flex-wrap justify-end gap-x-4 gap-y-1 text-small font-semibold">
             <Link href="/admin/plants" className="hover:underline">Plants</Link>
             <Link href="/admin/products" className="hover:underline">Shop</Link>
+            <Link href="/admin/orders" className="hover:underline">Orders</Link>
+            <Link href="/admin/promos" className="hover:underline">Promos</Link>
             <Link href="/discover" className="text-ink-muted hover:underline">View app</Link>
           </nav>
         </div>
