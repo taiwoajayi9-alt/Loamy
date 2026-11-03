@@ -72,7 +72,14 @@ jobs:
           rsync -az --delete -e "$SSH" bundle/app/ "$USER@$HOST:loamy-app/app.next/"
           rsync -az -e "$SSH" bundle/app.js "$USER@$HOST:loamy-app/app.js"
           $SSH "$USER@$HOST" 'cd ~/loamy-app && rm -rf app.old && { [ -d app ] && mv app app.old || true; } && mv app.next app && touch tmp/restart.txt && rm -rf app.old'
-          echo "Deployed."
+          echo "App deployed."
+          # Landing page: goes to the loamy.farm folder once that domain is added in cPanel (Domains → Create a New Domain).
+          if $SSH "$USER@$HOST" 'test -d ~/loamy.farm'; then
+            rsync -az -e "$SSH" landing/ "$USER@$HOST:loamy.farm/"
+            echo "Landing page deployed to loamy.farm."
+          else
+            echo "No ~/loamy.farm folder yet; skipping the landing page."
+          fi
 
       - name: Check the site responds
         if: env.HAS_DEPLOY == 'true'
