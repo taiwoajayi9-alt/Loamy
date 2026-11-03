@@ -142,3 +142,4 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 ## 2026-11-03 — Seedlings and starter packs
 - Owner will sell seedlings and starter packs, starting small. First: one "Herb starter pack" (seedling of scent leaf, sweet basil or mint + medium pot + potting mix), a draft with no price, linked to those three herbs so it shows in their "What you'll need".
 - The five sample shop items (made-up prices) are archived in the live database so they can never reach customers.
+- Plant photos: minimum lowered to 1,000 px on the shorter side (2:3 to 3:2) so ChatGPT's 1536 × 1024 images fit. Admin → Plants → "Upload photos for many plants at once" matches files to plants by name (slug, common or local name; "-2" or "(1)" suffixes ignored), checks each, and uploads them one at a time.

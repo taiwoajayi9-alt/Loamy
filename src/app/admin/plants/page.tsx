@@ -29,6 +29,9 @@ export default async function AdminPlants({ searchParams }: { searchParams: Prom
         </p>
       </div>
 
+      <Link href="/admin/plants/photos" className="self-start text-small font-semibold underline decoration-lemon decoration-2 underline-offset-4">
+        Upload photos for many plants at once
+      </Link>
       {notice ? <FormNotice tone="success">{notice}</FormNotice> : null}
       {error ? <FormNotice tone="error">{error}</FormNotice> : null}
 

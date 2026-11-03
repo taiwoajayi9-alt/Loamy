@@ -14,7 +14,28 @@ export type Bucket = (typeof BUCKETS)[keyof typeof BUCKETS];
 export type PhotoRules = { minSide: number; recommended: string; maxSide: number; minRatio: number; maxRatio: number; shapeHint: string };
 
 /** Plant profile photos: shown wide on the plant page and tall on Discover cards, so allow 3:4 to 3:2. */
-export const PLANT_PHOTO_RULES: PhotoRules = { minSide: 1200, recommended: "1800 × 1350", maxSide: 6000, minRatio: 0.75, maxRatio: 1.5, shapeHint: "between portrait 3:4 and landscape 3:2" };
+export const PLANT_PHOTO_RULES: PhotoRules = { minSide: 1000, recommended: "1536 × 1024 or larger", maxSide: 6000, minRatio: 0.66, maxRatio: 1.5, shapeHint: "between portrait 2:3 and landscape 3:2" };
+
+/**
+ * Matches a bulk-uploaded file name to a plant: "scent-leaf.png", "Scent leaf 2.jpg", "ugu (1).webp",
+ * "efirin.jpg" (local name). Returns the plant id or null.
+ */
+export function matchPlantFile(fileName: string, plants: { id: string; slug: string; commonName: string; localNames: string[] }[]): string | null {
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/\.[a-z0-9]+$/, "")
+      .replace(/\(\d+\)/g, " ")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/-(\d{1,2})$/, "")
+      .replace(/^-+|-+$/g, "");
+  const key = norm(fileName);
+  for (const p of plants) {
+    const names = [p.slug, p.commonName, ...p.localNames].map(norm);
+    if (names.includes(key)) return p.id;
+  }
+  return null;
+}
 
 /** Members' own photos: any sensible phone photo. */
 export const GARDEN_PHOTO_RULES: PhotoRules = { minSide: 400, recommended: "any phone photo", maxSide: 8000, minRatio: 0.33, maxRatio: 3, shapeHint: "not a very thin strip" };
