@@ -33,18 +33,21 @@ describe("AI plant drafts", () => {
 });
 
 describe("AI provider choice", () => {
-  it("uses DeepSeek when its key is set, then Anthropic, else off", async () => {
+  it("picks Gemini, then DeepSeek, then Anthropic, unless AI_PROVIDER says otherwise", async () => {
     const { aiDraftProvider } = await import("@/lib/ai/plant-draft");
-    const saved = { d: process.env.DEEPSEEK_API_KEY, a: process.env.ANTHROPIC_API_KEY };
-    delete process.env.DEEPSEEK_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
+    const keys = ["GEMINI_API_KEY", "DEEPSEEK_API_KEY", "ANTHROPIC_API_KEY", "AI_PROVIDER"] as const;
+    const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+    for (const k of keys) delete process.env[k];
     expect(aiDraftProvider()).toBeNull();
-    process.env.ANTHROPIC_API_KEY = "x";
+    process.env.ANTHROPIC_API_KEY = "a";
     expect(aiDraftProvider()).toBe("anthropic");
-    process.env.DEEPSEEK_API_KEY = "y";
+    process.env.DEEPSEEK_API_KEY = "d";
     expect(aiDraftProvider()).toBe("deepseek");
-    if (saved.d === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = saved.d;
-    if (saved.a === undefined) delete process.env.ANTHROPIC_API_KEY; else process.env.ANTHROPIC_API_KEY = saved.a;
+    process.env.GEMINI_API_KEY = "g";
+    expect(aiDraftProvider()).toBe("gemini");
+    process.env.AI_PROVIDER = "deepseek";
+    expect(aiDraftProvider()).toBe("deepseek");
+    for (const k of keys) if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k];
   });
 
   it("reads a draft wrapped in a ```json code block", () => {

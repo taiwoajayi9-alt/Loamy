@@ -132,7 +132,7 @@ export default async function EditPlant({
               <SubmitButton variant="lime" pendingLabel="Drafting… this can take a minute">Draft with AI</SubmitButton>
             </form>
           ) : (
-            <p className="rounded-2xl bg-white/10 px-4 py-3 text-small">AI drafting is off. Add a DeepSeek key to .env.local to turn it on. You can still write each section yourself below.</p>
+            <p className="rounded-2xl bg-white/10 px-4 py-3 text-small">AI drafting is off. Add a Gemini or DeepSeek key to .env.local to turn it on. You can still write each section yourself below.</p>
           )}
         </Card>
       ) : null}

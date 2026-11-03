@@ -149,7 +149,7 @@ export async function aiDraftAction(form: FormData) {
   const plantId = uuid.parse(form.get("plantId"));
   const actor = await requirePlantLibrary(`/admin/plants/${plantId}`);
   await run(plantId, "sections", async () => {
-    if (!aiDraftConfigured()) throw new WorkflowError("AI drafting is off. Add a DeepSeek key to .env.local to turn it on.");
+    if (!aiDraftConfigured()) throw new WorkflowError("AI drafting is off. Add a Gemini or DeepSeek key to .env.local to turn it on.");
     const data = await getAdminPlant(plantId);
     if (!data) throw new WorkflowError("Plant not found.");
     const category = data.categories.find((c) => c.id === data.plant.categoryId)?.name ?? "Plant";

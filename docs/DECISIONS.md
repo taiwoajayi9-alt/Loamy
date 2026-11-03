@@ -77,3 +77,4 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 ## 2026-11-03 — AI drafting provider
 - Owner chose DeepSeek for plant-content drafts (DEEPSEEK_API_KEY; default model deepseek-v4-pro, override with AI_DRAFT_MODEL).
 - Anthropic stays supported as a fallback. Expert review rules are unchanged: AI drafts are never published without approval.
+- Update: DeepSeek account had no credit, so Gemini (free tier, GEMINI_API_KEY, model gemini-flash-latest) was added and is preferred when its key is set. AI_PROVIDER can force a choice.

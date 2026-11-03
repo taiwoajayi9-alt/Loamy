@@ -11,11 +11,21 @@ export type PlantDraftInput = {
   tagline: string | null;
 };
 
-/** Which AI service drafts plant content. DeepSeek wins when both keys are set. */
-export function aiDraftProvider(): "deepseek" | "anthropic" | null {
-  if (process.env.DEEPSEEK_API_KEY) return "deepseek";
-  if (process.env.ANTHROPIC_API_KEY) return "anthropic";
-  return null;
+export type AiProvider = "gemini" | "deepseek" | "anthropic";
+
+/**
+ * Which AI service drafts plant content.
+ * AI_PROVIDER picks one explicitly; otherwise the first key found wins: Gemini (free tier), DeepSeek, Anthropic.
+ */
+export function aiDraftProvider(): AiProvider | null {
+  const keyFor: Record<AiProvider, string | undefined> = {
+    gemini: process.env.GEMINI_API_KEY,
+    deepseek: process.env.DEEPSEEK_API_KEY,
+    anthropic: process.env.ANTHROPIC_API_KEY,
+  };
+  const chosen = process.env.AI_PROVIDER as AiProvider | undefined;
+  if (chosen && chosen in keyFor) return keyFor[chosen] ? chosen : null;
+  return (["gemini", "deepseek", "anthropic"] as const).find((p) => keyFor[p]) ?? null;
 }
 
 export const aiDraftConfigured = () => aiDraftProvider() !== null;
