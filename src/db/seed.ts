@@ -5,16 +5,21 @@
  * - Plant and product categories
  * - Subscription plans: Quarterly ₦15,000, Annual ₦50,000
  *
+ * Launch catalogue (always seeded, as DRAFTS — see launch-catalogue.ts):
+ * - 16 launch plants pending expert review
+ * - Launch products with no price yet (an admin sets it before publishing)
+ *
  * Sample content (isSample = true; never seeded when NODE_ENV=production unless SEED_SAMPLES=1):
- * - Two plants (sweet basil, mint) with questions, stages and care templates, pending expert review
+ * - Two sample plants (sample-sweet-basil, sample-mint) with questions, stages and care templates, pending expert review
  * - Five products with SAMPLE prices
  *
  * Idempotent: re-running updates by slug/code instead of duplicating rows.
  */
-import { eq } from "drizzle-orm";
+import { eq, sql as dsql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as s from "./schema";
+import { LAUNCH_PLANTS, LAUNCH_PRODUCTS } from "./launch-catalogue";
 
 // Load .env.local when present (local runs); CI passes env vars directly.
 try {
@@ -52,10 +57,11 @@ async function upsertProductCategory(name: string, slug: string, sortOrder: numb
 async function main() {
   // ── Reference data ──────────────────────────────────────────
   const herbs = await upsertPlantCategory("Herbs", "herbs", 1);
-  await upsertPlantCategory("Leafy greens", "leafy-greens", 2);
-  await upsertPlantCategory("Vegetables", "vegetables", 3);
-  await upsertPlantCategory("Fruit", "fruit", 4);
-  await upsertPlantCategory("Ornamentals", "ornamentals", 5);
+  const plantCats: Record<string, string> = { herbs: herbs.id };
+  plantCats["leafy-greens"] = (await upsertPlantCategory("Leafy greens", "leafy-greens", 2)).id;
+  plantCats.vegetables = (await upsertPlantCategory("Vegetables", "vegetables", 3)).id;
+  plantCats.fruit = (await upsertPlantCategory("Fruit", "fruit", 4)).id;
+  plantCats.ornamentals = (await upsertPlantCategory("Ornamentals", "ornamentals", 5)).id;
 
   const kits = await upsertProductCategory("Starter kits", "starter-kits", 1);
   const plantsSeeds = await upsertProductCategory("Plants and seeds", "plants-and-seeds", 2);
@@ -93,6 +99,52 @@ async function main() {
   }
   console.log("Seeded categories and subscription plans (Quarterly ₦15,000, Annual ₦50,000).");
 
+  // ── Launch catalogue (drafts) ───────────────────────────────
+  const productCats: Record<string, string> = {
+    "starter-kits": kits.id,
+    "plants-and-seeds": plantsSeeds.id,
+    "growing-materials": materials.id,
+    "tools-and-accessories": tools.id,
+  };
+  for (const p of LAUNCH_PLANTS) {
+    const values = {
+      categoryId: plantCats[p.category],
+      slug: p.slug,
+      commonName: p.commonName,
+      localNames: p.localNames,
+      botanicalName: p.botanicalName,
+      tagline: p.tagline,
+      summaryLine: p.summaryLine,
+      status: "draft" as const,
+      isSample: false,
+    };
+    // New rows are inserted as drafts. An old sample row with the same slug becomes a launch draft.
+    // Rows an admin already owns (isSample = false) are never touched.
+    await db
+      .insert(s.plants)
+      .values(values)
+      .onConflictDoUpdate({
+        target: s.plants.slug,
+        set: { ...values, publishedAt: null },
+        setWhere: dsql`${s.plants.isSample} = true`,
+      });
+  }
+  for (const p of LAUNCH_PRODUCTS) {
+    const [product] = await db
+      .insert(s.products)
+      .values({ slug: p.slug, name: p.name, categoryId: productCats[p.category], description: p.description, status: "draft" })
+      .onConflictDoNothing({ target: s.products.slug })
+      .returning();
+    if (!product) continue; // already exists: the admin owns it now
+    // Price 0 + draft: the database refuses to publish a variant without a real price.
+    const [variant] = await db
+      .insert(s.productVariants)
+      .values({ productId: product.id, sku: p.sku, priceMinor: 0, status: "draft" })
+      .returning();
+    await db.insert(s.inventoryRecords).values({ variantId: variant.id, quantityAvailable: p.stock });
+  }
+  console.log(`Seeded launch catalogue as drafts (${LAUNCH_PLANTS.length} plants, ${LAUNCH_PRODUCTS.length} products).`);
+
   if (!seedSamples) {
     console.log("Production: skipped sample plants and products.");
     return;
@@ -101,16 +153,16 @@ async function main() {
   // ── Sample plants (pending expert review) ───────────────────
   const samplePlants = [
     {
-      slug: "sweet-basil",
-      commonName: "Sweet basil",
+      slug: "sample-sweet-basil",
+      commonName: "Sweet basil (sample)",
       botanicalName: "Ocimum basilicum",
       tagline: "The little herb with a lot of personality.",
       summaryLine: "Herb · beginner friendly",
       stages: ["Sow or plant", "Sprouting", "Seedling", "Leafy growth", "Ongoing harvest"],
     },
     {
-      slug: "mint",
-      commonName: "Mint",
+      slug: "sample-mint",
+      commonName: "Mint (sample)",
       botanicalName: "Mentha spp.",
       tagline: "Fresh, cooling and very keen to grow.",
       summaryLine: "Herb · spreads fast",
@@ -145,7 +197,7 @@ async function main() {
       {
         plantId: plant.id,
         questionKey: "space",
-        prompt: `Where will your ${p.commonName.toLowerCase()} grow?`,
+        prompt: `Where will your ${p.commonName.replace(" (sample)", "").toLowerCase()} grow?`,
         helpText: "This helps us check light and space.",
         options: [
           { value: "balcony", label: "Balcony" },

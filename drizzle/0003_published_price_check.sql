@@ -1,0 +1,1 @@
+ALTER TABLE "product_variants" ADD CONSTRAINT "product_variants_published_price_check" CHECK ("product_variants"."status" <> 'published' OR "product_variants"."price_minor" > 0);

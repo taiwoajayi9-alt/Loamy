@@ -1,4 +1,5 @@
-import { boolean, index, integer, jsonb, pgTable, text, unique, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, check, index, integer, jsonb, pgTable, text, unique, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   cartStatus,
   createdAt,
@@ -63,7 +64,11 @@ export const productVariants = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index().on(t.productId)],
+  (t) => [
+    index().on(t.productId),
+    // AI never sets prices, and nothing goes live at ₦0: a published variant needs an admin-set price.
+    check("product_variants_published_price_check", sql`${t.status} <> 'published' OR ${t.priceMinor} > 0`),
+  ],
 );
 
 /** v1.2 — several photos per product or variant. */

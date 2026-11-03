@@ -53,3 +53,9 @@ The project uses Supabase's publishable/secret keys and asymmetric JWT signing. 
 `getClaims()` (JWKS), server code with `getUser()`. All `public` tables have RLS enabled with no policies, so the
 Data API exposes nothing to the publishable key; the app's own server is the only path to data. Migration
 `0001_enable_rls.sql` and the `db:check-rls` CI step enforce this.
+
+## 2026-11-03 — Launch catalogue
+- All 16 proposed launch plants approved by the owner. Seeded as drafts; each needs expert review before publishing (LMY-34).
+- First shop items: 7-piece mini garden tool set and 1-gallon nursery pots (pack of 10), 10 in stock each. Seeded as drafts with no price.
+- The database refuses to publish a product variant without an admin-set price (`product_variants_published_price_check`).
+- Supplier listing photos are not used in the shop. Loamy uses its own product photos.
