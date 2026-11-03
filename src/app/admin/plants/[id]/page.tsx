@@ -17,10 +17,12 @@ import {
   type SectionState,
 } from "@/lib/plant-workflow";
 import { aiDraftConfigured } from "@/server/ai/plant-draft";
+import { AI_SOURCE_NOTE } from "@/lib/ai/plant-draft";
 import { getAdminPlant, getReviewNotes, requirePlantLibrary } from "@/server/plant-admin";
 import {
   addSourceAction,
   aiDraftAction,
+  aiSourcesAction,
   publishAction,
   removeSourceAction,
   reviewSectionAction,
@@ -142,10 +144,18 @@ export default async function EditPlant({
             ) : null;
           })()}
           {aiOn ? (
-            <form action={aiDraftAction}>
-              <input type="hidden" name="plantId" value={plant.id} />
-              <SubmitButton variant="lime" pendingLabel="Drafting… this can take a minute">Draft with AI</SubmitButton>
-            </form>
+            <div className="flex flex-wrap gap-2">
+              <form action={aiDraftAction}>
+                <input type="hidden" name="plantId" value={plant.id} />
+                <SubmitButton variant="lime" pendingLabel="Drafting… this can take a minute">Draft with AI</SubmitButton>
+              </form>
+              {sections.length ? (
+                <form action={aiSourcesAction}>
+                  <input type="hidden" name="plantId" value={plant.id} />
+                  <SubmitButton variant="secondary" pendingLabel="Finding and checking links…">Find sources with AI</SubmitButton>
+                </form>
+              ) : null}
+            </div>
           ) : (
             <p className="rounded-2xl bg-white/10 px-4 py-3 text-small">AI drafting is off. Add a Gemini or DeepSeek key to .env.local to turn it on. You can still write each section yourself below.</p>
           )}
@@ -236,9 +246,13 @@ export default async function EditPlant({
                           r.title
                         )}
                         {r.publisher ? <span className="text-ink-muted"> · {r.publisher}</span> : null}
-                        {r.note ? <span className="text-ink-muted"> · {r.note}</span> : null}
+                        {r.note === AI_SOURCE_NOTE ? (
+                          <Tag tone="peach" className="ml-1.5">AI suggested · check it</Tag>
+                        ) : r.note ? (
+                          <span className="text-ink-muted"> · {r.note}</span>
+                        ) : null}
                       </span>
-                      {state !== "approved" && (mayEdit || mayApprove) ? (
+                      {(state !== "approved" || r.note === AI_SOURCE_NOTE) && (mayEdit || mayApprove) ? (
                         <form action={removeSourceAction}>
                           <input type="hidden" name="plantId" value={plant.id} />
                           <input type="hidden" name="type" value={p.type} />

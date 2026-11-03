@@ -144,3 +144,67 @@ export function parseCareRoutine(text: string): CareDraft {
   if (!parsed.success) throw new Error("The AI care routine wasn't in the right shape. Try again.");
   return parsed.data;
 }
+
+// ── Source suggestions ─────────────────────────────────────────
+
+export const SOURCE_TYPES = ["research", "extension_service", "book", "expert_interview", "website"] as const;
+
+const sourceSchema = z.object({
+  title: z.string().trim().min(3).max(200),
+  publisher: z.string().trim().max(120).nullish(),
+  url: z.string().trim().url().max(500),
+  sourceType: z.enum(SOURCE_TYPES).catch("website"),
+});
+const sourcesSchema = z.object({ sources: z.array(z.unknown()).max(10) });
+export type SuggestedSource = { title: string; publisher: string | null; url: string; sourceType: (typeof SOURCE_TYPES)[number] };
+
+/** Marks AI-suggested references so reviewers can tell them apart from ones a person added. */
+export const AI_SOURCE_NOTE = "Suggested by AI, link checked. Confirm it backs this text before approving.";
+
+export function buildSourcesPrompt(p: PlantDraftInput): { system: string; user: string } {
+  const system = [
+    "You suggest reference sources for plant profiles in Loamy, a home gardening app for Lagos, Nigeria.",
+    "Suggest 3 to 5 real, well-known, publicly available web pages about growing this plant: for example FAO (including Ecocrop), PROTA4U, IITA, NIHORT, university or government extension services, the Royal Horticultural Society, Missouri Botanical Garden, Kew (POWO) or Wikipedia as a last resort.",
+    "Rules:",
+    "- Only suggest pages you are confident exist. Never invent a URL. A publisher's search or species page you are sure of is better than a guessed deep link.",
+    "- Prefer sources about growing the plant in the tropics or West Africa.",
+    "- No shops, seed sellers, blogs selling products, or social media.",
+    `- sourceType is one of: ${SOURCE_TYPES.join(", ")}.`,
+    'Reply with JSON only: {"sources":[{"title":"...","publisher":"...","url":"https://...","sourceType":"extension_service"}]}',
+  ].join("\n");
+  const facts = [
+    `Plant: ${p.commonName}`,
+    p.botanicalName ? `Botanical name: ${p.botanicalName}` : null,
+    p.localNames.length ? `Local names: ${p.localNames.join(", ")}` : null,
+  ].filter(Boolean);
+  return { system, user: `${facts.join("\n")}\n\nSuggest the sources.` };
+}
+
+/** Keeps well-formed https suggestions only, drops shops and duplicates. Bad entries are skipped, not fatal. */
+export function parseSources(text: string): SuggestedSource[] {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) throw new Error("The AI reply had no sources in it. Try again.");
+  let json: unknown;
+  try {
+    json = JSON.parse(text.slice(start, end + 1));
+  } catch {
+    throw new Error("The AI reply wasn't readable. Try again.");
+  }
+  const list = sourcesSchema.safeParse(json);
+  if (!list.success) throw new Error("The AI sources weren't in the right shape. Try again.");
+  const seen = new Set<string>();
+  const out: SuggestedSource[] = [];
+  for (const raw of list.data.sources) {
+    const s = sourceSchema.safeParse(raw);
+    if (!s.success) continue;
+    const url = s.data.url;
+    if (!url.startsWith("https://")) continue;
+    if (/amazon\.|jumia\.|konga\.|temu\.|aliexpress\.|ebay\.|etsy\.|facebook\.|instagram\.|tiktok\.|youtube\.|pinterest\./i.test(url)) continue;
+    const key = url.replace(/\/+$/, "").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ title: s.data.title, publisher: s.data.publisher ?? null, url, sourceType: s.data.sourceType });
+  }
+  return out.slice(0, 5);
+}

@@ -19,6 +19,7 @@ const ROWS: Array<{ label: string; icon: IconName; colour: TileColour; href: str
   { label: "Ask Loamy", icon: "chat", colour: "lilac", href: "/ask-loamy" },
   { label: "Orders", icon: "bag", colour: "peach", href: "/orders" },
   { label: "Membership", icon: "heart", colour: "lemon", href: "/subscribe" },
+  { label: "Privacy and data", icon: "shield", colour: "sky", href: "/profile/privacy" },
 ];
 
 export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ password?: string; notice?: string; error?: string }> }) {
@@ -101,6 +102,10 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
           </form>
         </details>
       ) : null}
+
+      <p className="text-center text-small text-ink-muted">
+        <Link href="/terms" className="underline">Terms of use</Link> · <Link href="/privacy" className="underline">Privacy notice</Link>
+      </p>
 
       <form action={logout}>
         <Button type="submit" variant="secondary" full>

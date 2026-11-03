@@ -1,5 +1,5 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { db } from "@/db/client";
 import { analyticsEvents, anonymousSessions, identityLinks } from "@/db/schema";
@@ -55,6 +55,8 @@ export async function recordEvent(input: {
       userId: input.userId ?? null,
       properties: event.props,
     });
+    // Privacy notice: visit counts are kept for up to 24 months. Tidy up now and then, without a scheduler.
+    if (Math.random() < 0.01) await purgeOldEvents();
     return true;
   } catch (err) {
     console.error("[analytics]", err);
@@ -85,4 +87,13 @@ export async function linkAnonymousSession(userId: string) {
   } catch (err) {
     console.error("[analytics:link]", err);
   }
+}
+
+export const ANALYTICS_RETENTION_MONTHS = 24;
+
+/** Deletes analytics events older than the retention period stated in the privacy notice. */
+export async function purgeOldEvents(now = new Date()) {
+  const cutoff = new Date(now);
+  cutoff.setMonth(cutoff.getMonth() - ANALYTICS_RETENTION_MONTHS);
+  await db.delete(analyticsEvents).where(lt(analyticsEvents.occurredAt, cutoff));
 }

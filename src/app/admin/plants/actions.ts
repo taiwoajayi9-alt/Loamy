@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { canEditPlants } from "@/lib/plant-workflow";
-import { runDraftAll } from "@/server/ai/draft-all";
+import { runDraftAll, type DraftJob } from "@/server/ai/draft-all";
 import { aiDraftConfigured } from "@/server/ai/plant-draft";
-import { getDraftAllStatus, logDraftAll, plantsNeedingDraft, requirePlantLibrary, submitAllDrafts } from "@/server/plant-admin";
+import { getDraftAllStatus, logDraftAll, plantsNeedingDraft, plantsNeedingSources, requirePlantLibrary, submitAllDrafts } from "@/server/plant-admin";
 
 const back = (key: "notice" | "error", msg: string) => redirect(`/admin/plants?${key}=${encodeURIComponent(msg)}`);
 
@@ -18,8 +18,12 @@ export async function draftAllAction() {
   const status = await getDraftAllStatus();
   if (status.state === "running") back("error", "A drafting run is already going. Wait for it to finish.");
 
-  const list = (await plantsNeedingDraft()).map((p) => ({ id: p.id, name: p.commonName }));
-  if (!list.length) back("notice", "Every plant already has all six sections started. Nothing to draft.");
+  const [toDraft, toSource] = await Promise.all([plantsNeedingDraft(), plantsNeedingSources()]);
+  const byId = new Map<string, DraftJob>();
+  for (const p of toDraft) byId.set(p.id, { id: p.id, name: p.commonName, draft: true, sources: false });
+  for (const p of toSource) byId.set(p.id, { ...(byId.get(p.id) ?? { id: p.id, name: p.commonName, draft: false }), sources: true });
+  const list = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+  if (!list.length) back("notice", "Every plant already has its sections and sources. Nothing to do.");
 
   await logDraftAll(actor, "plant.ai_draft_all.start", "all", { plants: list });
   after(() => runDraftAll(actor, list));

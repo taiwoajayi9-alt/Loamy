@@ -4,11 +4,14 @@ import {
   aiDraftProvider,
   buildCareRoutinePrompt,
   buildPlantDraftPrompt,
+  buildSourcesPrompt,
   parseCareRoutine,
+  parseSources,
   parsePlantDraft,
   type CareDraft,
   type PlantDraftInput,
   type PlantDraft,
+  type SuggestedSource,
 } from "@/lib/ai/plant-draft";
 
 export { aiDraftConfigured, aiDraftProvider };
@@ -124,4 +127,27 @@ async function callAnthropic(model: string, system: string, user: string): Promi
   if (!res.ok) throw new Error(`AI drafting failed (Anthropic ${res.status}). Try again in a minute.`);
   const body = (await res.json()) as { content?: { type: string; text?: string }[] };
   return (body.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("");
+}
+
+/**
+ * Asks the AI for reference pages, then opens each link and keeps only the ones that load.
+ * The model writes from memory and can misremember a link, so nothing is kept unchecked.
+ */
+export async function suggestPlantSources(input: PlantDraftInput, check: (url: string) => Promise<boolean> = linkWorks): Promise<SuggestedSource[]> {
+  const { system, user } = buildSourcesPrompt(input);
+  const suggested = parseSources(await complete(system, user));
+  const ok = await Promise.all(suggested.map((s) => check(s.url).catch(() => false)));
+  return suggested.filter((_, i) => ok[i]);
+}
+
+async function linkWorks(url: string): Promise<boolean> {
+  const res = await fetch(url, {
+    method: "GET",
+    redirect: "follow",
+    signal: AbortSignal.timeout(8000),
+    headers: { "user-agent": "LoamyLinkCheck/1.0 (+https://loamy.farm)", accept: "text/html,application/xhtml+xml,*/*" },
+  });
+  // Read a little and stop, so large pages don't slow the check down.
+  await res.body?.cancel().catch(() => undefined);
+  return res.status < 400;
 }

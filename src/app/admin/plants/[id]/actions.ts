@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { PILLAR_TYPES, type PillarType } from "@/lib/plant-workflow";
 import { LAUNCH_PLANTS } from "@/db/launch-catalogue";
-import { aiDraftConfigured, draftCareRoutine, draftPlantSections } from "@/server/ai/plant-draft";
+import { aiDraftConfigured, draftCareRoutine, draftPlantSections, suggestPlantSources } from "@/server/ai/plant-draft";
 import {
   addCareTemplate,
   addPlantImage,
@@ -28,6 +28,7 @@ import {
   submitAllDrafts,
   submitSection,
   updatePlantBasics,
+  attachAiSources,
   WorkflowError,
 } from "@/server/plant-admin";
 
@@ -174,6 +175,35 @@ export async function aiDraftAction(form: FormData) {
     const { filled, skipped } = await applyAiDraft(actor, plantId, draft);
     if (!filled.length) return "Nothing to draft. Every section is approved or waiting for review.";
     return `AI drafted ${filled.length} section${filled.length === 1 ? "" : "s"} and sent ${filled.length === 1 ? "it" : "them"} for review${skipped.length ? `. ${skipped.length} left untouched` : ""}.`;
+  });
+}
+
+/** AI suggests reference pages; only links that open are kept, labelled for the expert to confirm. */
+export async function aiSourcesAction(form: FormData) {
+  const plantId = uuid.parse(form.get("plantId"));
+  const actor = await requirePlantLibrary(`/admin/plants/${plantId}`);
+  await run(plantId, "sections", async () => {
+    if (!aiDraftConfigured()) throw new WorkflowError("AI is off. Add a Gemini or DeepSeek key to .env.local to turn it on.");
+    const data = await getAdminPlant(plantId);
+    if (!data) throw new WorkflowError("Plant not found.");
+    if (!data.sections.length) throw new WorkflowError("Draft the sections first, then find sources for them.");
+    let found;
+    try {
+      found = await suggestPlantSources({
+        commonName: data.plant.commonName,
+        botanicalName: data.plant.botanicalName,
+        localNames: data.plant.localNames,
+        category: "",
+        tagline: null,
+      });
+    } catch (err) {
+      throw new WorkflowError(err instanceof Error ? err.message : "AI couldn't find sources. Try again.");
+    }
+    if (!found.length) return "AI's suggested links didn't open, so none were added. Try again, or add a source yourself.";
+    const added = await attachAiSources(actor, plantId, found);
+    return added
+      ? `Added ${added} source${added === 1 ? "" : "s"}. Each link was checked and opens. Confirm they back the text when you review.`
+      : "Those sources are already on this plant.";
   });
 }
 

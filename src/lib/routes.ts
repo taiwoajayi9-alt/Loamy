@@ -4,7 +4,7 @@
  */
 
 /** Open to everyone, including visitors. Discovery, plan preview and the shop never need an account. */
-export const PUBLIC_PREFIXES = ["/", "/discover", "/plants", "/grow", "/shop", "/cart", "/login", "/register", "/forgot-password", "/reset-password", "/auth", "/offline"] as const;
+export const PUBLIC_PREFIXES = ["/", "/discover", "/plants", "/grow", "/shop", "/cart", "/login", "/register", "/forgot-password", "/reset-password", "/auth", "/offline", "/terms", "/privacy"] as const;
 
 /** Need a signed-in account. Checkout also needs a phone number and delivery address (owner decision). */
 export const SIGNED_IN_PREFIXES = ["/profile", "/subscribe", "/orders", "/checkout"] as const;

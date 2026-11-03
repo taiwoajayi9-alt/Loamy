@@ -89,7 +89,8 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
         <>
           <CheckoutForm defaults={defaults} promo={promo?.ok ? promoCode : null} payLabel={`Pay ${formatNaira(total)} with Paystack`} />
           <p className="text-center text-small text-ink-muted">
-            We’ll call you after you order to agree the delivery fee and time.
+            We’ll call you after you order to agree the delivery fee and time. By paying you agree to our{" "}
+            <Link href="/terms#s4" className="underline">shop terms</Link>.
             {paystackMode() === "test" ? " Test mode: use a Paystack test card. No real money moves." : ""}
           </p>
         </>

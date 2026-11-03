@@ -2,18 +2,20 @@ import "server-only";
 import { db } from "@/db/client";
 import { plantCategories, plants } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { applyAiDraft, logDraftAll, type Actor } from "@/server/plant-admin";
-import { draftPlantSections } from "./plant-draft";
+import { applyAiDraft, attachAiSources, logDraftAll, type Actor } from "@/server/plant-admin";
+import { draftPlantSections, suggestPlantSources } from "./plant-draft";
 
 /** Errors that will fail for every plant, so the run stops instead of burning through the list. */
 const FATAL = /didn't accept the API key|out of credit|doesn't recognise the model|drafting is off/i;
 
+export type DraftJob = { id: string; name: string; draft?: boolean; sources?: boolean };
+
 /**
- * Drafts each plant in turn, filling only empty sections. Runs after the response is sent
- * (next/server `after`), one plant at a time to stay inside free-tier and rate limits.
- * Progress is written to the audit log; see getDraftAllStatus.
+ * Drafts each plant in turn, filling only empty sections, then suggests checked sources for plants
+ * that have none. Runs after the response is sent (next/server `after`), one plant at a time to stay
+ * inside rate limits. Progress is written to the audit log; see getDraftAllStatus.
  */
-export async function runDraftAll(actor: Actor, list: { id: string; name: string }[]) {
+export async function runDraftAll(actor: Actor, list: DraftJob[]) {
   for (const p of list) {
     try {
       const [row] = await db
@@ -22,8 +24,12 @@ export async function runDraftAll(actor: Actor, list: { id: string; name: string
         .innerJoin(plantCategories, eq(plantCategories.id, plants.categoryId))
         .where(eq(plants.id, p.id));
       if (!row) throw new Error("Plant not found.");
-      const draft = await draftPlantSections(row);
-      await applyAiDraft(actor, p.id, draft, { onlyEmpty: true });
+      // Older jobs had no flags and meant "draft".
+      if (p.draft ?? true) await applyAiDraft(actor, p.id, await draftPlantSections(row), { onlyEmpty: true });
+      if (p.sources) {
+        const added = await attachAiSources(actor, p.id, await suggestPlantSources(row));
+        if (!(p.draft ?? true)) await logDraftAll(actor, "plant.ai_draft", p.id, { sourcesOnly: true, added });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       await logDraftAll(actor, "plant.ai_draft_failed", p.id, { message });

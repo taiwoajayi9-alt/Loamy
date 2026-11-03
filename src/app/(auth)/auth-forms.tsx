@@ -61,7 +61,10 @@ export function RegisterForm({ next }: { next?: string }) {
         <label className="flex items-start gap-2.5 text-small">
           <input type="checkbox" name="terms" className="mt-0.5 h-5 w-5 accent-[var(--loamy-black)]" aria-invalid={state.fieldErrors?.terms ? true : undefined} />
           <span>
-            I agree to the terms and the privacy notice. Creating an account is free and doesn&apos;t start a subscription.
+            I&apos;m 18 or older and agree to the{" "}
+            <a href="/terms" target="_blank" rel="noopener" className="underline">terms of use</a> and{" "}
+            <a href="/privacy" target="_blank" rel="noopener" className="underline">privacy notice</a>. Creating an account is free and doesn&apos;t start a
+            subscription.
           </span>
         </label>
         {state.fieldErrors?.terms ? <p className="text-xs font-medium text-danger-ink">{state.fieldErrors.terms}</p> : null}

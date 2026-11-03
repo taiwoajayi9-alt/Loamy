@@ -7,6 +7,7 @@ import { canManageShop } from "@/lib/product-admin";
 import { requireUser } from "@/server/auth";
 import { canHelp } from "@/server/help-admin";
 import { getRoles } from "@/server/plant-admin";
+import { canHandlePrivacy, canManageTeam } from "@/lib/team";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,8 @@ export default async function AdminHome() {
     { href: "/admin/orders", title: "Orders", body: "Call customers, arrange and track delivery.", icon: "check", colour: "lemon", allowed: canManageShop(roles) },
     { href: "/admin/help", title: "Help requests", body: "Members asking the Loamy team for help.", icon: "chat", colour: "sky", allowed: canHelp(roles) },
     { href: "/admin/promos", title: "Promo codes", body: "Create and switch off discount codes.", icon: "heart", colour: "lilac", allowed: canManageShop(roles) },
+    { href: "/admin/privacy", title: "Privacy requests", body: "Account deletion requests to complete.", icon: "shield", colour: "sage", allowed: canHandlePrivacy(roles) },
+    { href: "/admin/team", title: "Team", body: "Add your plant expert and staff, and set what they can do.", icon: "user", colour: "sky", allowed: canManageTeam(roles) },
   ];
   const mine = areas.filter((a) => a.allowed);
   if (!mine.length) redirect("/");

@@ -28,7 +28,7 @@ import {
   type AdminRole,
   type PillarType,
 } from "@/lib/plant-workflow";
-import type { PlantDraft } from "@/lib/ai/plant-draft";
+import { AI_SOURCE_NOTE, type PlantDraft, type SuggestedSource } from "@/lib/ai/plant-draft";
 import { BUCKETS, photoPath, PLANT_PHOTO_RULES, type IMAGE_TYPES } from "@/lib/photos";
 import { requireUser, type SessionUser } from "./auth";
 import { inspectPhoto, removeFrom, uploadTo } from "./storage";
@@ -401,14 +401,64 @@ export async function removeReference(actor: Actor, plantId: string, referenceId
   assert(canEditPlants(actor.roles) || canApprovePlants(actor.roles), "You don't have permission to remove sources.");
   await db.transaction(async (tx) => {
     const [ref] = await tx
-      .select({ id: plantReferences.id, sectionId: plantReferences.contentSectionId, status: plantContentSections.status })
+      .select({ id: plantReferences.id, sectionId: plantReferences.contentSectionId, status: plantContentSections.status, note: plantReferences.referenceNote })
       .from(plantReferences)
       .innerJoin(plantContentSections, eq(plantContentSections.id, plantReferences.contentSectionId))
       .where(and(eq(plantReferences.id, referenceId), eq(plantContentSections.plantId, plantId)));
     assert(Boolean(ref), "Source not found.", WorkflowError);
-    assert(ref!.status !== "published", "This source backs approved text. Edit the section to change its sources.", WorkflowError);
+    // AI-suggested sources can always be removed: the expert may spot a weak one after approving.
+    assert(ref!.status !== "published" || ref!.note === AI_SOURCE_NOTE, "This source backs approved text. Edit the section to change its sources.", WorkflowError);
     await tx.delete(plantReferences).where(eq(plantReferences.id, referenceId));
     await audit(tx, actor, "plant_source.remove", "plant_reference", referenceId, ref, null);
+  });
+}
+
+/** Draft plants (not samples) with no sources at all, for the AI to suggest some. */
+export async function plantsNeedingSources() {
+  const rows = await db
+    .select({ id: plants.id, commonName: plants.commonName })
+    .from(plants)
+    .where(and(eq(plants.status, "draft"), eq(plants.isSample, false)))
+    .orderBy(asc(plants.commonName));
+  if (!rows.length) return [];
+  const withRefs = await db
+    .selectDistinct({ plantId: plantContentSections.plantId })
+    .from(plantReferences)
+    .innerJoin(plantContentSections, eq(plantContentSections.id, plantReferences.contentSectionId))
+    .where(inArray(plantContentSections.plantId, rows.map((r) => r.id)));
+  const has = new Set(withRefs.map((r) => r.plantId));
+  return rows.filter((r) => !has.has(r.id));
+}
+
+/**
+ * Attaches AI-suggested, link-checked sources to the plant's latest version of every section.
+ * They're labelled so the expert knows to confirm them while reviewing. Returns how many were added.
+ */
+export async function attachAiSources(actor: Actor, plantId: string, sources: SuggestedSource[]): Promise<number> {
+  assert(canEditPlants(actor.roles), "You don't have permission to edit plants.");
+  if (!sources.length) return 0;
+  return db.transaction(async (tx) => {
+    const rows = await tx.select().from(plantContentSections).where(eq(plantContentSections.plantId, plantId));
+    const latest = [...latestByType(rows).values()];
+    if (!latest.length) return 0;
+    const existing = await tx
+      .select({ url: plantSources.url })
+      .from(plantReferences)
+      .innerJoin(plantSources, eq(plantSources.id, plantReferences.sourceId))
+      .where(inArray(plantReferences.contentSectionId, latest.map((l) => l.id)));
+    const known = new Set(existing.map((e) => e.url?.replace(/\/+$/, "").toLowerCase()));
+    let added = 0;
+    for (const s of sources) {
+      if (known.has(s.url.replace(/\/+$/, "").toLowerCase())) continue;
+      const [src] = await tx
+        .insert(plantSources)
+        .values({ title: s.title, publisher: s.publisher, url: s.url, sourceType: s.sourceType })
+        .returning({ id: plantSources.id });
+      await tx.insert(plantReferences).values(latest.map((l) => ({ contentSectionId: l.id, sourceId: src.id, referenceNote: AI_SOURCE_NOTE })));
+      added++;
+    }
+    await audit(tx, actor, "plant.ai_sources", "plant", plantId, null, { added, urls: sources.map((s) => s.url) });
+    return added;
   });
 }
 

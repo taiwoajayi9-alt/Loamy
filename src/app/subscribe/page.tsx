@@ -103,7 +103,8 @@ export default async function SubscribePage({ searchParams }: { searchParams: Pr
 
       {paymentsReady ? (
         <p className="text-center text-small text-ink-muted">
-          You’ll pay securely on Paystack. Cancel any time from your profile.
+          You’ll pay securely on Paystack. Cancel any time from your profile. By paying you agree to our{" "}
+          <Link href="/terms" className="underline">terms</Link>.
           {testMode ? " Test mode: use a Paystack test card. No real money moves." : ""}
         </p>
       ) : (

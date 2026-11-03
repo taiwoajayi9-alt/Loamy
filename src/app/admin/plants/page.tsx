@@ -5,7 +5,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { Card, EmptyState, FormNotice, Tag } from "@/components/ui";
 import { canEditPlants, PILLARS } from "@/lib/plant-workflow";
 import { aiDraftConfigured } from "@/server/ai/plant-draft";
-import { getDraftAllStatus, listAdminPlants, plantsNeedingDraft, requirePlantLibrary } from "@/server/plant-admin";
+import { getDraftAllStatus, listAdminPlants, plantsNeedingDraft, plantsNeedingSources, requirePlantLibrary } from "@/server/plant-admin";
 import { draftAllAction, submitAllPlantsAction } from "./actions";
 
 export const metadata: Metadata = { title: "Plant library" };
@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic";
 export default async function AdminPlants({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string }> }) {
   const actor = await requirePlantLibrary("/admin/plants");
   const { notice, error } = await searchParams;
-  const [rows, job, needing] = await Promise.all([listAdminPlants(), getDraftAllStatus(), plantsNeedingDraft()]);
+  const [rows, job, needDraft, needSources] = await Promise.all([listAdminPlants(), getDraftAllStatus(), plantsNeedingDraft(), plantsNeedingSources()]);
+  const needing = [...new Map([...needDraft, ...needSources].map((p) => [p.id, p])).values()];
   const mayDraft = canEditPlants(actor.roles) && aiDraftConfigured();
   const live = rows.filter((r) => r.status === "published").length;
   const waiting = rows.reduce((n, r) => n + r.inReview, 0);
@@ -72,17 +73,19 @@ export default async function AdminPlants({ searchParams }: { searchParams: Prom
               {needing.length ? (
                 <>
                   <p className="text-small text-ink-on-black">
-                    {needing.length} plant{needing.length === 1 ? " has" : "s have"} empty sections. AI fills only the empty ones, one plant at a time,
-                    so anything you’ve written or edited stays as it is. Drafts go straight to the expert for review.
+                    {needDraft.length ? `${needDraft.length} plant${needDraft.length === 1 ? " has" : "s have"} empty sections. ` : ""}
+                    {needSources.length ? `${needSources.length} plant${needSources.length === 1 ? " has" : "s have"} no sources. ` : ""}
+                    AI fills only what’s missing, one plant at a time, so anything you’ve written stays as it is. It suggests sources too, and keeps
+                    only links that actually open. Everything goes to the expert for review.
                   </p>
                   <form action={draftAllAction}>
                     <SubmitButton variant="lime" pendingLabel="Starting…">
-                      Draft {needing.length} plant{needing.length === 1 ? "" : "s"}
+                      {needDraft.length ? "Draft" : "Find sources for"} {needing.length} plant{needing.length === 1 ? "" : "s"}
                     </SubmitButton>
                   </form>
                 </>
               ) : (
-                <p className="text-small text-ink-on-black">Every plant has all six sections started.</p>
+                <p className="text-small text-ink-on-black">Every plant has all six sections started and at least one source.</p>
               )}
             </>
           )}

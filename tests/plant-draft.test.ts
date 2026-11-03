@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildPlantDraftPrompt, draftWarnings, parsePlantDraft } from "@/lib/ai/plant-draft";
+import { buildSourcesPrompt, parseSources } from "@/lib/ai/plant-draft";
 
 const body = "Scent leaf is a bushy herb that grows happily in Lagos heat. ".repeat(2);
 
@@ -54,5 +55,33 @@ describe("AI provider choice", () => {
     const body = "Waterleaf grows fast in Lagos humidity and loves a bit of shade. ".repeat(2);
     const reply = "```json\n" + JSON.stringify({ sections: [{ type: "meet", title: "Meet waterleaf", body }] }) + "\n```";
     expect(parsePlantDraft(reply).sections).toHaveLength(1);
+  });
+});
+
+describe("AI source suggestions", () => {
+  it("keeps good https links and drops shops, duplicates and broken entries", () => {
+    const reply = JSON.stringify({
+      sources: [
+        { title: "Ecocrop: Ocimum gratissimum", publisher: "FAO", url: "https://ecocrop.review.fao.org/x", sourceType: "extension_service" },
+        { title: "Same again", publisher: "FAO", url: "https://ecocrop.review.fao.org/x/", sourceType: "website" },
+        { title: "Buy seeds", publisher: "Shop", url: "https://www.jumia.com.ng/seeds", sourceType: "website" },
+        { title: "Plain http", publisher: null, url: "http://example.org/a", sourceType: "website" },
+        { title: "No link", publisher: "X" },
+        { title: "PROTA4U", publisher: "PROTA", url: "https://prota.prota4u.org/p", sourceType: "made-up-type" },
+      ],
+    });
+    const out = parseSources(`Here you go: ${reply}`);
+    expect(out.map((s) => s.url)).toEqual(["https://ecocrop.review.fao.org/x", "https://prota.prota4u.org/p"]);
+    expect(out[1].sourceType).toBe("website");
+  });
+
+  it("rejects replies with no JSON", () => {
+    expect(() => parseSources("sorry")).toThrow(/no sources/);
+  });
+
+  it("asks for real pages only", () => {
+    const { system, user } = buildSourcesPrompt({ commonName: "Mint", botanicalName: "Mentha spp.", localNames: [], category: "herbs", tagline: null });
+    expect(system).toMatch(/Never invent a URL/);
+    expect(user).toMatch(/Mentha/);
   });
 });
