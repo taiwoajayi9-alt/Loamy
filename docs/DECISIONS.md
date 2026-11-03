@@ -46,3 +46,9 @@ work offline and no third-party font request is made from users' devices.
 ### Offline
 The service worker caches the app shell and an offline page only. It never caches private pages, payments or
 entitlement-sensitive responses.
+
+### Supabase keys and row-level security (3 Nov 2026)
+The project uses Supabase's publishable/secret keys and asymmetric JWT signing. Middleware verifies sessions with
+`getClaims()` (JWKS), server code with `getUser()`. All `public` tables have RLS enabled with no policies, so the
+Data API exposes nothing to the publishable key; the app's own server is the only path to data. Migration
+`0001_enable_rls.sql` and the `db:check-rls` CI step enforce this.

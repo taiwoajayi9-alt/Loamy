@@ -52,5 +52,7 @@ jobs:
       - name: Schema and migrations are in sync
         run: npx drizzle-kit check && npx drizzle-kit generate --name ci-drift-check && test -z "$(git status --porcelain drizzle/)"
       - run: npm run db:migrate
+      - name: Every table has row-level security
+        run: npm run db:check-rls
       - name: Seed twice (must be idempotent)
         run: npm run db:seed && npm run db:seed

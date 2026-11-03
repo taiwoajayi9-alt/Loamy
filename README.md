@@ -81,10 +81,23 @@ docs/DECISIONS.md     Owner and engineering decisions
 - Sample plants/products are flagged `is_sample` and must not ship to production.
 - No deploys, paid infrastructure or live payments without owner approval.
 
-## Supabase setup (when approved)
+## Supabase setup
 
-1. Create a project (free tier is enough for development) in a region close to Lagos.
-2. Auth → URL configuration: add `http://localhost:3000/auth/callback` and your preview/staging URLs.
-3. Copy the project URL and anon key into `.env.local`; copy the pooled and direct connection strings into
-   `DATABASE_URL` and `DIRECT_URL`.
-4. Run `npm run db:migrate && npm run db:seed`.
+Project: `kimietimcjqdeomihnsw` (keys use the new publishable/secret format and asymmetric JWT signing).
+
+1. **Env:** copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY`.
+2. **Database URLs:** Supabase dashboard → **Connect** → copy the *Transaction pooler* string into `DATABASE_URL`
+   and the *Direct connection* (or *Session pooler* if your network has no IPv6) into `DIRECT_URL`, replacing
+   `[YOUR-PASSWORD]` with the database password.
+3. **Create the tables:** `npm run db:migrate && npm run db:check-rls && npm run db:seed`.
+4. **Auth URLs:** Authentication → URL Configuration → Site URL `http://localhost:3000`; add
+   `http://localhost:3000/auth/callback` (and later your staging URL + `/auth/callback`) to Redirect URLs.
+5. `npm run dev`, register at `/register`, confirm the email, then log in.
+
+Security notes:
+- Every `public` table has row-level security on with no policies, so the publishable key cannot read app data
+  through Supabase's Data API. The app reads data over its direct database connection and checks access in
+  server code. CI fails if a table ships without RLS.
+- Middleware verifies sessions with `getClaims()` against the project's JWKS; server code uses `getUser()`.
+- `SUPABASE_SECRET_KEY` and the database password are server-only and must never be committed or sent to the browser.
