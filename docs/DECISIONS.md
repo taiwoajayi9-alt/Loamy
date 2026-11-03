@@ -101,3 +101,9 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - Prices and stock are re-read and locked at checkout. Placing an order holds the stock for 30 minutes while the shopper pays; unpaid holds are released. A payment that arrives after the hold still counts and is flagged for a stock check.
 - Customers pay for items only (promo codes applied server-side). Paystack is re-verified on the server before an order counts as paid; replays are ignored.
 - Admin: Orders screen (call the customer, set status, agreed delivery fee, date and notes; every change logged) and Promo codes screen. Promo codes apply to the shop now; membership promos later.
+
+## 2026-11-03 — Hosting
+- Marketing landing page on loamy.farm; the PWA on app.loamy.farm. Both on the owner's Namecheap shared hosting (cPanel).
+- The app runs on Namecheap's "Setup Node.js App" (Passenger) with Node 22.23.4, from a Next.js standalone bundle in ~/loamy-app/app with deploy/app.js as the startup file.
+- GitHub Actions builds and sends each version over SSH (port 21098) after CI passes, swapping folders so the live app is never half-updated. Secrets live only in ~/loamy-app/.env on the server (sent with scripts/push-env.sh), never in Git.
+- Database, auth and photos stay on Supabase.

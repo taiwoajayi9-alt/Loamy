@@ -1,0 +1,87 @@
+name: Deploy app
+
+# Builds the standalone app and sends it to Namecheap over SSH after CI passes on main.
+# Needs repository secrets: DEPLOY_SSH_KEY, DEPLOY_HOST, DEPLOY_USER (port 21098 on Namecheap)
+# Public build settings below can be overridden with repository variables of the same name.
+# Skips quietly until the secrets are set.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-app
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HAS_DEPLOY: ${{ secrets.DEPLOY_SSH_KEY != '' && secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' }}
+    steps:
+      - name: Skip until deploy settings exist
+        if: env.HAS_DEPLOY != 'true'
+        run: echo "Deploy secrets not set yet; nothing to do."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_DEPLOY == 'true'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-node@v4
+        if: env.HAS_DEPLOY == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build
+        if: env.HAS_DEPLOY == 'true'
+        env:
+          # Public values (safe in the browser). Secrets stay on the server in ~/loamy-app/.env.
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://app.loamy.farm' }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://kimietimcjqdeomihnsw.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_qcSDPYTQ3CuyPYMghVXgzQ_DZgR_41M' }}
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          npm ci
+          npx next build
+          mkdir -p bundle/app/.next
+          cp -r .next/standalone/. bundle/app/
+          cp -r .next/static bundle/app/.next/static
+          cp -r public bundle/app/public
+          cp deploy/app.js bundle/app.js
+          du -sh bundle
+
+      - name: Send to Namecheap
+        if: env.HAS_DEPLOY == 'true'
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          ssh-keyscan -p 21098 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          SSH="ssh -p 21098 -i ~/.ssh/deploy -o BatchMode=yes"
+          # Upload to a fresh folder, then swap it in, so the live app is never half-updated.
+          $SSH "$USER@$HOST" 'mkdir -p ~/loamy-app/tmp && rm -rf ~/loamy-app/app.next'
+          rsync -az --delete -e "$SSH" bundle/app/ "$USER@$HOST:loamy-app/app.next/"
+          rsync -az -e "$SSH" bundle/app.js "$USER@$HOST:loamy-app/app.js"
+          $SSH "$USER@$HOST" 'cd ~/loamy-app && rm -rf app.old && { [ -d app ] && mv app app.old || true; } && mv app.next app && touch tmp/restart.txt && rm -rf app.old'
+          echo "Deployed."
+
+      - name: Check the site responds
+        if: env.HAS_DEPLOY == 'true'
+        run: |
+          URL="${{ vars.NEXT_PUBLIC_SITE_URL || 'https://app.loamy.farm' }}"
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/discover" || true)
+            echo "Attempt $i: $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "The app didn't answer with 200. Check cPanel → Setup Node.js App → the app's log." && exit 1
