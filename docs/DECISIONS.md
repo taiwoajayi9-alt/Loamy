@@ -138,3 +138,7 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - "Ready to plant" no longer lists plants already growing. Profile rows go to real pages only. A plan made before sign-up is claimed via the sign-up link even if email is confirmed in another browser.
 - Privacy choice is now a slim strip at the top of the page, in the normal flow, so it never covers buttons or the nav.
 - The plant library shows each draft plant's launch checklist (sections, care routine, source, photo) and "Ready to publish".
+
+## 2026-11-03 — Seedlings and starter packs
+- Owner will sell seedlings and starter packs, starting small. First: one "Herb starter pack" (seedling of scent leaf, sweet basil or mint + medium pot + potting mix), a draft with no price, linked to those three herbs so it shows in their "What you'll need".
+- The five sample shop items (made-up prices) are archived in the live database so they can never reach customers.

@@ -155,6 +155,10 @@ async function main() {
       .values({ productId: product.id, sku: p.sku, priceMinor: 0, status: "draft" })
       .returning();
     await db.insert(s.inventoryRecords).values({ variantId: variant.id, quantityAvailable: p.stock });
+    for (const slug of p.forPlants ?? []) {
+      const plant = await db.query.plants.findFirst({ where: eq(s.plants.slug, slug), columns: { id: true } });
+      if (plant) await db.insert(s.productPlantRelations).values({ productId: product.id, plantId: plant.id, relevanceType: "start_kit" }).onConflictDoNothing();
+    }
   }
   console.log(`Seeded launch catalogue as drafts (${LAUNCH_PLANTS.length} plants, ${LAUNCH_PRODUCTS.length} products).`);
 

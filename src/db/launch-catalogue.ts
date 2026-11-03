@@ -51,10 +51,22 @@ export type LaunchProduct = {
   category: "starter-kits" | "plants-and-seeds" | "growing-materials" | "tools-and-accessories";
   description: string;
   stock: number;
+  /** Plants this item helps start (shown in their "What you'll need"). */
+  forPlants?: string[];
 };
 
 /** Prices are deliberately absent: an admin sets the selling price before publishing. */
 export const LAUNCH_PRODUCTS: LaunchProduct[] = [
+  {
+    slug: "herb-starter-pack",
+    sku: "LMY-STARTER-HERB",
+    name: "Herb starter pack",
+    category: "starter-kits",
+    description:
+      "Everything to start one herb: a healthy seedling of scent leaf, sweet basil or mint (tell us which when we call about delivery), a medium pot with drainage holes, and potting mix. Plant it the day it arrives, then tap “I’ve planted it” in your Loamy garden.",
+    stock: 0,
+    forPlants: ["scent-leaf", "sweet-basil", "mint"],
+  },
   {
     slug: "mini-garden-tool-set-7",
     sku: "LMY-TOOLSET-7",
