@@ -42,12 +42,38 @@ export function productReadiness(p: ProductReadinessInput): { ready: boolean; mi
 }
 
 export const IMAGE_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" } as const;
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Photo quality rules (owner decision). Shop cards and product pages show photos square,
+ * so photos must be close to square and big enough to stay sharp on high-resolution phones.
+ */
+export const PHOTO_RULES = {
+  minSide: 1200,
+  recommended: 1600,
+  maxSide: 6000,
+  /** width ÷ height must sit between these: 4:5 portrait to 5:4 landscape. */
+  minRatio: 0.8,
+  maxRatio: 1.25,
+} as const;
 
 export function checkImage(file: { type: string; size: number }): string | null {
-  if (!(file.type in IMAGE_TYPES)) return "Use a JPG, PNG or WebP photo.";
+  if (!(file.type in IMAGE_TYPES)) return "Use a JPG, PNG or WebP photo. iPhone HEIC photos need converting to JPG first.";
   if (file.size === 0) return "That file is empty.";
-  if (file.size > MAX_IMAGE_BYTES) return "That photo is over 5 MB. Try a smaller one.";
+  if (file.size > MAX_IMAGE_BYTES) return "That photo is over 10 MB. Export it smaller (about 2000 pixels wide is plenty).";
+  return null;
+}
+
+/** Returns a plain-English problem with the photo's size or shape, or null if it's good. */
+export function checkDimensions(width: number, height: number): string | null {
+  const { minSide, maxSide, minRatio, maxRatio, recommended } = PHOTO_RULES;
+  if (!width || !height) return "We couldn't read the photo's size. Try exporting it again as JPG.";
+  if (Math.min(width, height) < minSide)
+    return `This photo is ${width} × ${height} pixels, which is too small to look sharp. Use at least ${minSide} × ${minSide} (${recommended} × ${recommended} is best).`;
+  if (Math.max(width, height) > maxSide) return `This photo is ${width} × ${height} pixels, which is larger than needed. Resize it to about ${recommended} × ${recommended}.`;
+  const ratio = width / height;
+  if (ratio < minRatio || ratio > maxRatio)
+    return `This photo is ${width} × ${height} pixels, which is too ${ratio > 1 ? "wide" : "tall"}. The shop shows photos square, so crop it to a square (${recommended} × ${recommended} is best).`;
   return null;
 }
 

@@ -31,10 +31,10 @@ describe("publishing shop items", () => {
 });
 
 describe("photos", () => {
-  it("accepts JPG, PNG and WebP up to 5 MB", () => {
+  it("accepts JPG, PNG and WebP up to 10 MB", () => {
     expect(checkImage({ type: "image/jpeg", size: 1000 })).toBeNull();
     expect(checkImage({ type: "image/gif", size: 1000 })).toMatch(/JPG/);
-    expect(checkImage({ type: "image/png", size: 6 * 1024 * 1024 })).toMatch(/5 MB/);
+    expect(checkImage({ type: "image/png", size: 11 * 1024 * 1024 })).toMatch(/10 MB/);
     expect(checkImage({ type: "image/webp", size: 0 })).toMatch(/empty/);
   });
   it("builds storage paths and public URLs", () => {
@@ -44,5 +44,31 @@ describe("photos", () => {
   it("slugs names safely", () => {
     expect(slugify("Nursery pots, 1 gallon (10)")).toBe("nursery-pots-1-gallon-10");
     expect(slugify("Café crème")).toBe("cafe-creme");
+  });
+});
+
+describe("photo size rules", () => {
+  it("accepts square photos of at least 1200 pixels", async () => {
+    const { checkDimensions } = await import("@/lib/product-admin");
+    expect(checkDimensions(1600, 1600)).toBeNull();
+    expect(checkDimensions(1200, 1200)).toBeNull();
+    expect(checkDimensions(1600, 2000)).toBeNull(); // 4:5 portrait is fine
+  });
+  it("explains what's wrong in plain words", async () => {
+    const { checkDimensions } = await import("@/lib/product-admin");
+    expect(checkDimensions(800, 800)).toMatch(/too small.*at least 1200 × 1200/);
+    expect(checkDimensions(3000, 1500)).toMatch(/too wide.*square/);
+    expect(checkDimensions(1500, 3000)).toMatch(/too tall/);
+    expect(checkDimensions(8000, 8000)).toMatch(/larger than needed/);
+    expect(checkDimensions(0, 0)).toMatch(/couldn't read/);
+  });
+  it("reads real pixel sizes from the file", async () => {
+    const { imageSize } = await import("image-size");
+    // Minimal PNG header: signature + IHDR chunk for a 1600 × 1200 image.
+    const png = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,
+      0, 0, 0x06, 0x40, 0, 0, 0x04, 0xb0, 8, 2, 0, 0, 0, 0, 0, 0, 0,
+    ]);
+    expect(imageSize(png)).toMatchObject({ width: 1600, height: 1200, type: "png" });
   });
 });

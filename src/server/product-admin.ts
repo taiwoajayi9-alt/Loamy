@@ -4,10 +4,13 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { auditLogs, inventoryRecords, productCategories, productImages, productVariants, products } from "@/db/schema";
-import { canManageShop, checkImage, productImagePath, productReadiness, slugify, type IMAGE_TYPES } from "@/lib/product-admin";
+import { imageSize } from "image-size";
+import { canManageShop, checkDimensions, checkImage, productImagePath, productReadiness, slugify, type IMAGE_TYPES } from "@/lib/product-admin";
 import { requireUser } from "./auth";
 import { getRoles, NotAllowed, WorkflowError, type Actor } from "./plant-admin";
 import { deleteProductImage, uploadProductImage } from "./storage";
+
+const IMAGE_TYPE_NAMES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" } as const;
 
 export async function requireShopAdmin(nextPath: string): Promise<Actor> {
   const user = await requireUser(nextPath);
@@ -142,6 +145,20 @@ export async function addProductImage(actor: Actor, id: string, file: File, altT
   allow(actor);
   const problem = checkImage(file);
   if (problem) throw new WorkflowError(problem);
+  // Check the real pixels on the server too; the browser check can be skipped.
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let dims: { width?: number; height?: number; type?: string; orientation?: number };
+  try {
+    dims = imageSize(bytes);
+  } catch {
+    throw new WorkflowError("That file isn't a photo we can read. Export it again as JPG.");
+  }
+  const expected = IMAGE_TYPE_NAMES[file.type as keyof typeof IMAGE_TYPES];
+  if (dims.type !== expected) throw new WorkflowError("The file type doesn't match its contents. Export it again as JPG.");
+  // EXIF orientation 5-8 means the camera stored it sideways, so swap width and height.
+  const sideways = (dims.orientation ?? 1) >= 5;
+  const sizeProblem = checkDimensions(sideways ? dims.height ?? 0 : dims.width ?? 0, sideways ? dims.width ?? 0 : dims.height ?? 0);
+  if (sizeProblem) throw new WorkflowError(sizeProblem);
   const exists = await db.query.products.findFirst({ where: eq(products.id, id), columns: { id: true } });
   if (!exists) throw new WorkflowError("Item not found.");
   const path = productImagePath(id, file.type as keyof typeof IMAGE_TYPES, randomUUID());

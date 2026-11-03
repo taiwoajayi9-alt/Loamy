@@ -78,3 +78,7 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - Owner chose DeepSeek for plant-content drafts (DEEPSEEK_API_KEY; default model deepseek-v4-pro, override with AI_DRAFT_MODEL).
 - Anthropic stays supported as a fallback. Expert review rules are unchanged: AI drafts are never published without approval.
 - Update: DeepSeek account had no credit, so Gemini (free tier, GEMINI_API_KEY, model gemini-flash-latest) was added and is preferred when its key is set. AI_PROVIDER can force a choice.
+
+## 2026-11-03 — Product photo quality
+- Photos must be near-square (4:5 to 5:4) and at least 1200 × 1200 pixels; 1600 × 1600 is recommended. Over 6000 pixels is refused.
+- JPG, PNG or WebP up to 10 MB. Checked in the browser for instant feedback and again on the server from the real pixels (camera rotation respected).

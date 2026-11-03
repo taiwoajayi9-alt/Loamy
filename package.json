@@ -2,7 +2,7 @@
   "name": "loamy",
   "version": "0.1.0",
   "private": true,
-  "description": "Loamy \u2014 Grow a little joy. AI-powered home gardening, learning and commerce PWA.",
+  "description": "Loamy — Grow a little joy. AI-powered home gardening, learning and commerce PWA.",
   "engines": {
     "node": ">=20.11"
   },
@@ -28,6 +28,7 @@
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.118.0",
     "drizzle-orm": "0.45.4",
+    "image-size": "2.0.2",
     "next": "15.5.28",
     "postgres": "3.4.9",
     "react": "19.1.1",

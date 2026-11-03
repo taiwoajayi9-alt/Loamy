@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { z } from "zod";
+import { PhotoPicker } from "@/components/photo-picker";
 import { SubmitButton } from "@/components/submit-button";
 import { Card, Field, FormNotice, Tag } from "@/components/ui";
 import { formatNaira } from "@/lib/money";
@@ -113,7 +114,7 @@ export default async function EditProduct({
       <Card className="flex flex-col gap-4 p-5">
         <h2 id="photos" className="scroll-mt-20 text-lg font-semibold">Photos</h2>
         <p className="text-small text-ink-muted">
-          Use your own photos of the real item, in daylight on a plain background. Don&rsquo;t use supplier or marketplace photos.
+          Use your own photos of the real item, in daylight on a plain background, cropped square. Don&rsquo;t use supplier or marketplace photos.
           The first photo is the cover.
         </p>
         {images.length ? (
@@ -148,14 +149,10 @@ export default async function EditProduct({
         {uploadsOn ? (
           <form action={addImageAction} className="grid gap-3 rounded-2xl bg-chip p-4 sm:grid-cols-2 sm:items-end">
             <input type="hidden" name="productId" value={product.id} />
-            <div className="flex flex-col gap-2">
-              <label htmlFor="field-photo" className="text-small font-semibold">Photo</label>
-              <input id="field-photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" required className="text-small" />
-              <p className="text-xs text-ink-muted">JPG, PNG or WebP, up to 5 MB.</p>
-            </div>
+            <PhotoPicker submitId="upload-photo" />
             <Field label="Describe the photo" name="altText" required placeholder="e.g. Seven garden tools laid out on a table" />
             <div className="sm:col-span-2">
-              <SubmitButton variant="secondary" pendingLabel="Uploading…">Upload photo</SubmitButton>
+              <SubmitButton id="upload-photo" variant="secondary" pendingLabel="Uploading…">Upload photo</SubmitButton>
             </div>
           </form>
         ) : (

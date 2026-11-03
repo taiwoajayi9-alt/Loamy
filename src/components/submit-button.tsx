@@ -12,6 +12,7 @@ export function SubmitButton({
   full = false,
   name,
   value,
+  id,
 }: {
   children: React.ReactNode;
   pendingLabel?: string;
@@ -20,10 +21,11 @@ export function SubmitButton({
   full?: boolean;
   name?: string;
   value?: string;
+  id?: string;
 }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" variant={variant} size={size} full={full} disabled={pending} aria-busy={pending} name={name} value={value}>
+    <Button type="submit" variant={variant} size={size} full={full} disabled={pending} aria-busy={pending} name={name} value={value} id={id}>
       {pending ? pendingLabel : children}
     </Button>
   );
