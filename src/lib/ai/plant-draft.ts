@@ -11,7 +11,14 @@ export type PlantDraftInput = {
   tagline: string | null;
 };
 
-export const aiDraftConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
+/** Which AI service drafts plant content. DeepSeek wins when both keys are set. */
+export function aiDraftProvider(): "deepseek" | "anthropic" | null {
+  if (process.env.DEEPSEEK_API_KEY) return "deepseek";
+  if (process.env.ANTHROPIC_API_KEY) return "anthropic";
+  return null;
+}
+
+export const aiDraftConfigured = () => aiDraftProvider() !== null;
 
 const sectionSchema = z.object({
   type: z.enum(PILLAR_TYPES as [PillarType, ...PillarType[]]),

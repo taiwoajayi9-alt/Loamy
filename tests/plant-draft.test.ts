@@ -31,3 +31,25 @@ describe("AI plant drafts", () => {
     expect(draftWarnings("People use it in pepper soup.")).toHaveLength(0);
   });
 });
+
+describe("AI provider choice", () => {
+  it("uses DeepSeek when its key is set, then Anthropic, else off", async () => {
+    const { aiDraftProvider } = await import("@/lib/ai/plant-draft");
+    const saved = { d: process.env.DEEPSEEK_API_KEY, a: process.env.ANTHROPIC_API_KEY };
+    delete process.env.DEEPSEEK_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    expect(aiDraftProvider()).toBeNull();
+    process.env.ANTHROPIC_API_KEY = "x";
+    expect(aiDraftProvider()).toBe("anthropic");
+    process.env.DEEPSEEK_API_KEY = "y";
+    expect(aiDraftProvider()).toBe("deepseek");
+    if (saved.d === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = saved.d;
+    if (saved.a === undefined) delete process.env.ANTHROPIC_API_KEY; else process.env.ANTHROPIC_API_KEY = saved.a;
+  });
+
+  it("reads a draft wrapped in a ```json code block", () => {
+    const body = "Waterleaf grows fast in Lagos humidity and loves a bit of shade. ".repeat(2);
+    const reply = "```json\n" + JSON.stringify({ sections: [{ type: "meet", title: "Meet waterleaf", body }] }) + "\n```";
+    expect(parsePlantDraft(reply).sections).toHaveLength(1);
+  });
+});

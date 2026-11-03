@@ -73,3 +73,7 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - An item goes live only with a price, a description and at least one photo. Live items can't lose their price or last photo.
 - Photos live in the public Supabase Storage bucket `product-images` (JPG, PNG or WebP, up to 5 MB). Uploads go through the server with the secret key; browsers can only read.
 - Stock can't go below what's held in open orders. Every change is audit-logged.
+
+## 2026-11-03 — AI drafting provider
+- Owner chose DeepSeek for plant-content drafts (DEEPSEEK_API_KEY; default model deepseek-v4-pro, override with AI_DRAFT_MODEL).
+- Anthropic stays supported as a fallback. Expert review rules are unchanged: AI drafts are never published without approval.
