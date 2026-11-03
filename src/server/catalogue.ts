@@ -10,6 +10,7 @@ import {
   plantSources,
   plants,
   productCategories,
+  productImages,
   productVariants,
   products,
 } from "@/db/schema";
@@ -97,6 +98,8 @@ export function listPublishedProducts(opts: { category?: string; limit?: number 
         isSample: products.isSample,
         fromPriceMinor: min(productVariants.priceMinor).mapWith(Number),
         stock: sql<number>`coalesce(sum(${inventoryRecords.quantityAvailable} - ${inventoryRecords.reservedQuantity}), 0)`.mapWith(Number),
+        coverPath: sql<string | null>`(select ${productImages.storagePath} from ${productImages} where ${productImages.productId} = ${products.id} order by ${productImages.sortOrder}, ${productImages.createdAt} limit 1)`,
+        coverAlt: sql<string | null>`(select ${productImages.altText} from ${productImages} where ${productImages.productId} = ${products.id} order by ${productImages.sortOrder}, ${productImages.createdAt} limit 1)`,
       })
       .from(products)
       .innerJoin(productCategories, eq(productCategories.id, products.categoryId))

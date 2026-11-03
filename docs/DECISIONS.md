@@ -67,3 +67,9 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - Roles: content_admin writes and publishes; plant_expert approves; super_admin can do both.
 - AI drafting is off until ANTHROPIC_API_KEY is set. It never overwrites approved text or text waiting for review, and drafts mentioning prices or medical claims are flagged for the reviewer.
 - Every change is written to audit_logs.
+
+## 2026-11-03 — Shop admin
+- commerce_admin (or super_admin) sets names, descriptions, prices (typed in naira, stored in kobo), stock and photos.
+- An item goes live only with a price, a description and at least one photo. Live items can't lose their price or last photo.
+- Photos live in the public Supabase Storage bucket `product-images` (JPG, PNG or WebP, up to 5 MB). Uploads go through the server with the secret key; browsers can only read.
+- Stock can't go below what's held in open orders. Every change is audit-logged.

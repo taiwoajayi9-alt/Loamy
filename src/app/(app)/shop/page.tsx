@@ -1,9 +1,11 @@
+/* eslint-disable @next/next/no-img-element -- product photos are served from Supabase Storage */
 import Link from "next/link";
 import type { Metadata } from "next";
 import { TrackEvent } from "@/components/analytics";
 import { Card, EmptyState, HeroCard, Icon, Page, PhotoPlaceholder, Tag } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/money";
+import { publicImageUrl } from "@/lib/product-admin";
 import { listProductCategories, listPublishedProducts } from "@/server/catalogue";
 
 export const metadata: Metadata = { title: "Shop" };
@@ -15,6 +17,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
   const items = productsRes.ok ? productsRes.data : [];
   const cats = catsRes.ok ? catsRes.data : [];
   const hasSamples = items.some((p) => p.isSample);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 
   return (
     <Page>
@@ -57,7 +60,16 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
             return (
               <li key={p.slug}>
                 <Card className="flex items-center gap-3.5 p-3">
-                  <PhotoPlaceholder label="product" tone="grey" caption="none" className="h-[88px] w-[88px] flex-none rounded-xl" />
+                  {p.coverPath && supabaseUrl ? (
+                    <img
+                      src={publicImageUrl(supabaseUrl, p.coverPath)}
+                      alt={p.coverAlt ?? p.name}
+                      loading="lazy"
+                      className="h-[88px] w-[88px] flex-none rounded-xl bg-chip object-cover"
+                    />
+                  ) : (
+                    <PhotoPlaceholder label="product" tone="grey" caption="none" className="h-[88px] w-[88px] flex-none rounded-xl" />
+                  )}
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <p className="font-semibold">{p.name}</p>
                     <p className="text-small text-ink-muted">{p.category}</p>
