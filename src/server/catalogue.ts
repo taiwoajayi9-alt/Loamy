@@ -6,6 +6,7 @@ import {
   inventoryRecords,
   plantCategories,
   plantContentSections,
+  plantImages,
   plantReferences,
   plantSources,
   plants,
@@ -45,6 +46,7 @@ export function listPublishedPlants(opts: { category?: string; q?: string; limit
         summaryLine: plants.summaryLine,
         category: plantCategories.name,
         isSample: plants.isSample,
+        coverPath: sql<string | null>`(select ${plantImages.storagePath} from ${plantImages} where ${plantImages.plantId} = ${plants.id} order by ${plantImages.sortOrder}, ${plantImages.createdAt} limit 1)`,
       })
       .from(plants)
       .innerJoin(plantCategories, eq(plantCategories.id, plants.categoryId))
@@ -81,7 +83,13 @@ export function getPublishedPlant(slug: string) {
       .innerJoin(plantCategories, eq(plantCategories.id, plants.categoryId))
       .where(and(eq(plants.slug, slug), eq(plants.status, "published")))
       .limit(1);
-    return row ?? null;
+    if (!row) return null;
+    const images = await db
+      .select({ path: plantImages.storagePath, alt: plantImages.altText, caption: plantImages.caption })
+      .from(plantImages)
+      .where(eq(plantImages.plantId, row.id))
+      .orderBy(asc(plantImages.sortOrder), asc(plantImages.createdAt));
+    return { ...row, images };
   });
 }
 

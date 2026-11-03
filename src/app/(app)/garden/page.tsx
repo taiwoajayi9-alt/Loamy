@@ -1,9 +1,11 @@
+/* eslint-disable @next/next/no-img-element -- photos are served from Supabase Storage */
 import Link from "next/link";
 import type { Metadata } from "next";
 import { CareTaskCard } from "@/components/care-task";
 import { SubmitButton } from "@/components/submit-button";
 import { ButtonLink, Card, EmptyState, FormNotice, HeroCard, Icon, Page, PhotoPlaceholder, QuickAction, Tag } from "@/components/ui";
 import { env } from "@/lib/env";
+import { BUCKETS, publicUrl } from "@/lib/photos";
 import { getSessionUser, userHasEntitlement } from "@/server/auth";
 import { getGardenOverview, plansNotInGarden } from "@/server/garden";
 import { addToGardenAction } from "./actions";
@@ -37,6 +39,7 @@ export default async function GardenPage({ searchParams }: { searchParams: Promi
 
   const [{ garden, plants, tasks, doneToday }, plans] = await Promise.all([getGardenOverview(user.id), plansNotInGarden(user.id)]);
   const total = tasks.length + doneToday;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 
   return (
     <Page>
@@ -108,7 +111,11 @@ export default async function GardenPage({ searchParams }: { searchParams: Promi
               <li key={p.id}>
                 <Link href={`/garden/plants/${p.id}`}>
                   <Card className="flex h-full flex-col gap-2 p-4 hover:border-line-strong">
-                    <PhotoPlaceholder label={p.commonName.toLowerCase()} caption="none" className="h-24 rounded-xl" />
+                    {p.ownPhotoUrl || (p.coverPath && supabaseUrl) ? (
+                      <img src={p.ownPhotoUrl ?? publicUrl(supabaseUrl, BUCKETS.plants, p.coverPath!)} alt="" className="h-24 w-full rounded-xl bg-chip object-cover" />
+                    ) : (
+                      <PhotoPlaceholder label={p.commonName.toLowerCase()} caption="none" className="h-24 rounded-xl" />
+                    )}
                     <p className="font-semibold leading-tight">{p.name}</p>
                     <p className="text-small text-ink-muted">{p.stage ?? "Growing"}</p>
                     {p.due ? <Tag tone="lemon" className="self-start">{p.due} to do</Tag> : <span className="flex items-center gap-1 text-small text-leaf-ink"><Icon name="check" size={14} /> All done</span>}

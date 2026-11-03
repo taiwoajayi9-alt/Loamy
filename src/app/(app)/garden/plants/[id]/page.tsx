@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- private photos are shown through signed links */
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -9,7 +10,9 @@ import { cn } from "@/lib/cn";
 import { daysBetween, HARVEST_UNITS, lagosDay, MILESTONES, TASK_TYPES, taskTypeLabel } from "@/lib/care";
 import { requireEntitlement } from "@/server/auth";
 import { getGardenPlant } from "@/server/garden";
-import { archivePlantAction, plantRecordAction } from "../../actions";
+import { PhotoPicker } from "@/components/photo-picker";
+import { storageConfigured } from "@/server/storage";
+import { archivePlantAction, gardenPhotoAction, plantRecordAction } from "../../actions";
 
 export const metadata: Metadata = { title: "Your plant" };
 export const dynamic = "force-dynamic";
@@ -34,7 +37,7 @@ export default async function GardenPlantPage({ params, searchParams }: { params
   const { notice, error } = await searchParams;
   const data = await getGardenPlant(user.id, id);
   if (!data) notFound();
-  const { gp, plant, tasks, stages, activities, milestones, harvests } = data;
+  const { gp, plant, tasks, stages, activities, milestones, harvests, photos } = data;
   const name = gp.nickname || plant.commonName;
   const today = lagosDay(new Date());
   const age = gp.plantingDate ? daysBetween(gp.plantingDate, today) : null;
@@ -137,6 +140,46 @@ export default async function GardenPlantPage({ params, searchParams }: { params
           </details>
         </Card>
       ) : null}
+
+      <Card className="flex flex-col gap-3 p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Photos</h2>
+          <span className="text-xs text-ink-muted">Only you can see these</span>
+        </div>
+        {photos.length ? (
+          <ul className="grid grid-cols-3 gap-2">
+            {photos.map((ph) => (
+              <li key={ph.id} className="flex flex-col gap-1">
+                {ph.url ? (
+                  <img src={ph.url} alt={ph.caption ?? `${name}, ${fmt.format(ph.uploadedAt)}`} loading="lazy" className="aspect-square w-full rounded-xl bg-chip object-cover" />
+                ) : (
+                  <div className="aspect-square w-full rounded-xl bg-chip" />
+                )}
+                <span className="text-[11px] text-ink-muted">{fmt.format(ph.uploadedAt)}{ph.caption ? ` · ${ph.caption}` : ""}</span>
+                <form action={gardenPhotoAction}>
+                  <input type="hidden" name="gardenPlantId" value={id} />
+                  <input type="hidden" name="photoId" value={ph.id} />
+                  <input type="hidden" name="op" value="remove" />
+                  <button type="submit" className="text-[11px] font-semibold text-danger-ink underline">Remove</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-small text-ink-muted">Snap your plant every week or two. It’s the best way to see how far it’s come.</p>
+        )}
+        {active && storageConfigured() ? (
+          <details className="rounded-2xl bg-chip p-4">
+            <summary className="cursor-pointer text-small font-semibold">Add a photo</summary>
+            <form action={gardenPhotoAction} className="mt-3 flex flex-col gap-3">
+              <input type="hidden" name="gardenPlantId" value={id} />
+              <PhotoPicker submitId="upload-garden-photo" kind="garden" />
+              <Field label="Caption (optional)" name="caption" id="ph-caption" placeholder="e.g. First flowers!" />
+              <SubmitButton id="upload-garden-photo" pendingLabel="Uploading…">Add photo</SubmitButton>
+            </form>
+          </details>
+        ) : null}
+      </Card>
 
       <Card className="flex flex-col gap-3 p-5">
         <h2 className="font-semibold">History</h2>

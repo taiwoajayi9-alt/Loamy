@@ -8,6 +8,9 @@ import { LAUNCH_PLANTS } from "@/db/launch-catalogue";
 import { aiDraftConfigured, draftCareRoutine, draftPlantSections } from "@/server/ai/plant-draft";
 import {
   addCareTemplate,
+  addPlantImage,
+  makePlantCover,
+  removePlantImage,
   addSource,
   applyAiCareDraft,
   approveAllForPlant,
@@ -269,5 +272,33 @@ export async function approveAllAction(form: FormData) {
     const { sections, care } = await approveAllForPlant(actor, plantId);
     if (!sections && !care) return "Nothing was waiting for review.";
     return `Approved ${sections} section${sections === 1 ? "" : "s"} and ${care} care task${care === 1 ? "" : "s"}. Add a source, then publish.`;
+  });
+}
+
+// ── Plant photos ───────────────────────────────────────────────
+
+export async function addPlantImageAction(form: FormData) {
+  const plantId = uuid.parse(form.get("plantId"));
+  const actor = await requirePlantLibrary(`/admin/plants/${plantId}`);
+  await run(plantId, "photos", async () => {
+    const file = form.get("photo");
+    if (!(file instanceof File) || file.size === 0) throw new WorkflowError("Choose a photo first.");
+    const alt = z.string().trim().min(3, "Describe the photo in a few words, for people using screen readers.").max(200).parse(form.get("altText"));
+    await addPlantImage(actor, plantId, file, alt, optText(140).parse(form.get("caption") ?? ""));
+    return "Photo added.";
+  });
+}
+
+export async function plantImageAction(form: FormData) {
+  const plantId = uuid.parse(form.get("plantId"));
+  const actor = await requirePlantLibrary(`/admin/plants/${plantId}`);
+  await run(plantId, "photos", async () => {
+    const imageId = uuid.parse(form.get("imageId"));
+    if (form.get("op") === "cover") {
+      await makePlantCover(actor, plantId, imageId);
+      return "Cover photo updated.";
+    }
+    await removePlantImage(actor, plantId, imageId);
+    return "Photo removed.";
   });
 }

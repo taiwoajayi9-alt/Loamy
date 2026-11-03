@@ -1,7 +1,9 @@
+/* eslint-disable @next/next/no-img-element -- plant photos are served from Supabase Storage */
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TrackEvent } from "@/components/analytics";
 import { ButtonLink, EmptyState, Icon, Page, PhotoPlaceholder, Tag } from "@/components/ui";
+import { BUCKETS, publicUrl } from "@/lib/photos";
 import { getPublishedPlant, getPublishedSections } from "@/server/catalogue";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +42,7 @@ export default async function PlantPage({ params }: { params: Promise<{ slug: st
     );
   }
   const plant = res.data!;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const content = await getPublishedSections(plant.id);
   const sections = content.ok ? content.data.sections : [];
   const sources = content.ok ? content.data.sources : [];
@@ -48,7 +51,11 @@ export default async function PlantPage({ params }: { params: Promise<{ slug: st
     <Page className="gap-5 pt-0">
       <TrackEvent name="plant_profile_viewed" props={{ plant_id: plant.slug, category: plant.category }} />
       <div className="relative -mx-4">
-        <PhotoPlaceholder label={`${plant.commonName.toLowerCase()} in daylight`} className="h-[300px]" />
+        {plant.images[0] && supabaseUrl ? (
+          <img src={publicUrl(supabaseUrl, BUCKETS.plants, plant.images[0].path)} alt={plant.images[0].alt} className="h-[300px] w-full bg-chip object-cover" />
+        ) : (
+          <PhotoPlaceholder label={`${plant.commonName.toLowerCase()} in daylight`} className="h-[300px]" />
+        )}
         <Link
           href="/discover"
           aria-label="Back to Discover"
@@ -86,6 +93,16 @@ export default async function PlantPage({ params }: { params: Promise<{ slug: st
               <SectionBody text={s.body} />
             </section>
           ))}
+          {plant.images.length > 1 && supabaseUrl ? (
+            <section aria-label="More photos" className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
+              {plant.images.slice(1).map((im) => (
+                <figure key={im.path} className="w-[200px] flex-none">
+                  <img src={publicUrl(supabaseUrl, BUCKETS.plants, im.path)} alt={im.alt} loading="lazy" className="aspect-[4/3] w-full rounded-2xl bg-chip object-cover" />
+                  {im.caption ? <figcaption className="mt-1 text-xs text-ink-muted">{im.caption}</figcaption> : null}
+                </figure>
+              ))}
+            </section>
+          ) : null}
           {sources.length ? (
             <details className="rounded-card bg-card p-4">
               <summary className="cursor-pointer text-small font-semibold">Where this comes from</summary>

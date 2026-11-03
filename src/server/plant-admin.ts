@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
@@ -6,6 +7,7 @@ import {
   adminRoleAssignments,
   auditLogs,
   careTaskTemplates,
+  plantImages,
   plantCategories,
   plantContentSections,
   plantReferences,
@@ -27,7 +29,9 @@ import {
   type PillarType,
 } from "@/lib/plant-workflow";
 import type { PlantDraft } from "@/lib/ai/plant-draft";
+import { BUCKETS, photoPath, PLANT_PHOTO_RULES, type IMAGE_TYPES } from "@/lib/photos";
 import { requireUser, type SessionUser } from "./auth";
+import { inspectPhoto, removeFrom, uploadTo } from "./storage";
 
 export type Actor = SessionUser & { roles: AdminRole[] };
 
@@ -129,7 +133,8 @@ export async function getAdminPlant(id: string) {
   const sourceCount = new Set(refs.map((r) => r.sourceId)).size;
   const care = await getCareTemplates(id);
   const approvedCare = care.filter((c) => c.reviewStatus === "approved" && c.status === "published").length;
-  return { plant, categories, sections, refs, care, readiness: publishReadiness(sections, sourceCount, approvedCare) };
+  const images = await getPlantImages(id);
+  return { plant, categories, sections, refs, care, images, readiness: publishReadiness(sections, sourceCount, approvedCare) };
 }
 
 /** Latest "changes requested" note per section, so the writer sees what the expert asked for. */
@@ -524,5 +529,54 @@ export async function approveAllForPlant(actor: Actor, plantId: string): Promise
     if (waiting.length || care.length)
       await audit(tx, actor, "plant.approve_all", "plant", plantId, null, { sections: waiting.map((s) => s.sectionType), careTasks: care.length });
     return { sections: waiting.length, care: care.length };
+  });
+}
+
+// ── Plant photos (public; shown on Discover, plant pages and in gardens) ──
+
+export async function getPlantImages(plantId: string) {
+  return db.select().from(plantImages).where(eq(plantImages.plantId, plantId)).orderBy(asc(plantImages.sortOrder), asc(plantImages.createdAt));
+}
+
+export async function addPlantImage(actor: Actor, plantId: string, file: File, altText: string, caption: string | null) {
+  assert(canEditPlants(actor.roles), "You don't have permission to edit plants.");
+  const problem = await inspectPhoto(file, PLANT_PHOTO_RULES);
+  if (problem) throw new WorkflowError(problem);
+  const plant = await db.query.plants.findFirst({ where: eq(plants.id, plantId), columns: { id: true } });
+  assert(Boolean(plant), "Plant not found.", WorkflowError);
+  const path = photoPath(`plants/${plantId}`, file.type as keyof typeof IMAGE_TYPES, randomUUID());
+  await uploadTo(BUCKETS.plants, path, file);
+  try {
+    await db.transaction(async (tx) => {
+      const [{ n }] = await tx.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(plantImages).where(eq(plantImages.plantId, plantId));
+      await tx.insert(plantImages).values({ plantId, storagePath: path, altText, caption, sortOrder: n });
+      await audit(tx, actor, "plant.image_add", "plant", plantId, null, { path, altText });
+    });
+  } catch (err) {
+    await removeFrom(BUCKETS.plants, path);
+    throw err;
+  }
+}
+
+export async function removePlantImage(actor: Actor, plantId: string, imageId: string) {
+  assert(canEditPlants(actor.roles), "You don't have permission to edit plants.");
+  const path = await db.transaction(async (tx) => {
+    const [img] = await tx.select().from(plantImages).where(and(eq(plantImages.id, imageId), eq(plantImages.plantId, plantId)));
+    assert(Boolean(img), "Photo not found.", WorkflowError);
+    await tx.delete(plantImages).where(eq(plantImages.id, imageId));
+    await audit(tx, actor, "plant.image_remove", "plant", plantId, { path: img!.storagePath }, null);
+    return img!.storagePath;
+  });
+  await removeFrom(BUCKETS.plants, path);
+}
+
+export async function makePlantCover(actor: Actor, plantId: string, imageId: string) {
+  assert(canEditPlants(actor.roles), "You don't have permission to edit plants.");
+  await db.transaction(async (tx) => {
+    const imgs = await tx.select({ id: plantImages.id }).from(plantImages).where(eq(plantImages.plantId, plantId)).orderBy(asc(plantImages.sortOrder), asc(plantImages.createdAt));
+    assert(imgs.some((i) => i.id === imageId), "Photo not found.", WorkflowError);
+    const order = [imageId, ...imgs.map((i) => i.id).filter((x) => x !== imageId)];
+    for (const [i, id] of order.entries()) await tx.update(plantImages).set({ sortOrder: i }).where(eq(plantImages.id, id));
+    await audit(tx, actor, "plant.image_cover", "plant", plantId, null, { imageId });
   });
 }

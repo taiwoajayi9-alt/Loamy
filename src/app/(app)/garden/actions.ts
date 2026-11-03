@@ -6,7 +6,9 @@ import { z } from "zod";
 import { HARVEST_UNITS, lagosDay, MILESTONES, TASK_TYPES } from "@/lib/care";
 import { requireEntitlement } from "@/server/auth";
 import {
+  addGardenPhoto,
   addPlanToGarden,
+  removeGardenPhoto,
   archiveGardenPlant,
   GardenError,
   handleTask,
@@ -117,4 +119,24 @@ export async function archivePlantAction(form: FormData) {
     back(`/garden/plants/${id}`, "error", errMsg(err));
   }
   back("/garden", "notice", "Moved out of your active garden. Its history is kept.");
+}
+
+export async function gardenPhotoAction(form: FormData) {
+  const id = uuid.parse(form.get("gardenPlantId"));
+  const user = await member(`/garden/plants/${id}`);
+  const path = `/garden/plants/${id}`;
+  let notice = "Photo added. Look at it grow!";
+  try {
+    if (form.get("op") === "remove") {
+      await removeGardenPhoto(user, id, uuid.parse(form.get("photoId")));
+      notice = "Photo removed.";
+    } else {
+      const file = form.get("photo");
+      if (!(file instanceof File) || file.size === 0) throw new GardenError("Choose a photo first.");
+      await addGardenPhoto(user, id, file, optNote.parse(form.get("caption") ?? ""));
+    }
+  } catch (err) {
+    back(path, "error", errMsg(err));
+  }
+  back(path, "notice", notice);
 }

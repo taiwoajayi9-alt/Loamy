@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { TrackEvent } from "@/components/analytics";
 import { EmptyState, HeroCard, Icon, Page, PhotoCard, QuickAction, Tag, Wordmark } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import { BUCKETS, publicUrl } from "@/lib/photos";
 import { listPlantCategories, listPublishedPlants } from "@/server/catalogue";
 
 export const metadata: Metadata = { title: "Discover" };
@@ -17,6 +18,7 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Sea
     listPlantCategories(),
   ]);
   const plants = plantsRes.ok ? plantsRes.data : [];
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const cats = catsRes.ok ? catsRes.data : [];
 
   return (
@@ -117,6 +119,7 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Sea
                 title={p.commonName}
                 line={p.summaryLine}
                 badge={p.category}
+                imageUrl={p.coverPath && supabaseUrl ? publicUrl(supabaseUrl, BUCKETS.plants, p.coverPath) : null}
               />
             ))}
           </div>

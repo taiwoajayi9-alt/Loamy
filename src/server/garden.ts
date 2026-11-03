@@ -1,5 +1,6 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   careSchedules,
@@ -12,12 +13,16 @@ import {
   harvestRecords,
   plantActivities,
   plantGrowthStages,
+  plantImages,
   plantMilestones,
+  plantPhotos,
   plants,
 } from "@/db/schema";
 import { dueTasks, lagosDay, type CareTemplate, type TaskType } from "@/lib/care";
 import type { Answers } from "@/lib/grow/questions";
+import { BUCKETS, GARDEN_PHOTO_RULES, photoPath, type IMAGE_TYPES } from "@/lib/photos";
 import { trackServer } from "./analytics";
+import { inspectPhoto, removeFrom, signedUrls, uploadTo } from "./storage";
 import type { SessionUser } from "./auth";
 import type { PlanSnapshot } from "./grow";
 
@@ -135,7 +140,14 @@ async function syncTasks(gps: { id: string; plantId: string; plantingDate: strin
 
 export async function getGardenOverview(userId: string) {
   const rows = await db
-    .select({ gp: gardenPlants, plant: { slug: plants.slug, commonName: plants.commonName }, stage: plantGrowthStages.name, garden: { id: gardens.id, name: gardens.name } })
+    .select({
+      gp: gardenPlants,
+      plant: { slug: plants.slug, commonName: plants.commonName },
+      stage: plantGrowthStages.name,
+      garden: { id: gardens.id, name: gardens.name },
+      cover: sql<string | null>`(select ${plantImages.storagePath} from ${plantImages} where ${plantImages.plantId} = ${plants.id} order by ${plantImages.sortOrder}, ${plantImages.createdAt} limit 1)`,
+      latestPhoto: sql<string | null>`(select ${plantPhotos.storagePath} from ${plantPhotos} where ${plantPhotos.gardenPlantId} = ${gardenPlants.id} order by ${plantPhotos.uploadedAt} desc limit 1)`,
+    })
     .from(gardenPlants)
     .innerJoin(gardens, eq(gardens.id, gardenPlants.gardenId))
     .innerJoin(plants, eq(plants.id, gardenPlants.plantId))
@@ -143,6 +155,7 @@ export async function getGardenOverview(userId: string) {
     .where(and(eq(gardens.userId, userId), eq(gardenPlants.status, "active")))
     .orderBy(asc(gardenPlants.createdAt));
   const tasks = await syncTasks(rows.map((r) => r.gp));
+  const own = await signedUrls(BUCKETS.garden, rows.flatMap((r) => (r.latestPhoto ? [r.latestPhoto] : [])));
   const today = lagosDay(new Date());
   const scheduleIds = (await db.select({ id: careSchedules.id }).from(careSchedules).where(inArray(careSchedules.gardenPlantId, rows.length ? rows.map((r) => r.gp.id) : ["00000000-0000-0000-0000-000000000000"]))).map((s) => s.id);
   const doneToday = scheduleIds.length
@@ -152,7 +165,18 @@ export async function getGardenOverview(userId: string) {
     : 0;
   return {
     garden: rows[0]?.garden ?? null,
-    plants: rows.map((r) => ({ id: r.gp.id, slug: r.plant.slug, name: r.gp.nickname || r.plant.commonName, commonName: r.plant.commonName, stage: r.stage, plantingDate: r.gp.plantingDate, due: tasks.filter((t) => t.gardenPlantId === r.gp.id).length })),
+    plants: rows.map((r) => ({
+      id: r.gp.id,
+      slug: r.plant.slug,
+      name: r.gp.nickname || r.plant.commonName,
+      commonName: r.plant.commonName,
+      stage: r.stage,
+      plantingDate: r.gp.plantingDate,
+      due: tasks.filter((t) => t.gardenPlantId === r.gp.id).length,
+      coverPath: r.cover,
+      // Their own latest photo wins over the catalogue photo (signed, private link).
+      ownPhotoUrl: r.latestPhoto ? (own.get(r.latestPhoto) ?? null) : null,
+    })),
     tasks: tasks.map((t) => ({ ...t, plantName: rows.find((r) => r.gp.id === t.gardenPlantId)?.gp.nickname || rows.find((r) => r.gp.id === t.gardenPlantId)?.plant.commonName || "" })),
     doneToday,
   };
@@ -161,14 +185,16 @@ export async function getGardenOverview(userId: string) {
 export async function getGardenPlant(userId: string, gardenPlantId: string) {
   const owned = await ownedGardenPlant(userId, gardenPlantId);
   if (!owned) return null;
-  const [tasks, stages, activities, milestones, harvests] = await Promise.all([
+  const [tasks, stages, activities, milestones, harvests, photos] = await Promise.all([
     owned.gp.status === "active" ? syncTasks([owned.gp]) : Promise.resolve([]),
     db.select().from(plantGrowthStages).where(eq(plantGrowthStages.plantId, owned.plant.id)).orderBy(asc(plantGrowthStages.sequence)),
     db.select().from(plantActivities).where(eq(plantActivities.gardenPlantId, gardenPlantId)).orderBy(desc(plantActivities.performedAt)).limit(30),
     db.select().from(plantMilestones).where(eq(plantMilestones.gardenPlantId, gardenPlantId)).orderBy(desc(plantMilestones.recordedAt)),
     db.select().from(harvestRecords).where(eq(harvestRecords.gardenPlantId, gardenPlantId)).orderBy(desc(harvestRecords.harvestDate)),
+    db.select().from(plantPhotos).where(eq(plantPhotos.gardenPlantId, gardenPlantId)).orderBy(desc(plantPhotos.uploadedAt)).limit(40),
   ]);
-  return { ...owned, tasks, stages, activities, milestones, harvests };
+  const urls = await signedUrls(BUCKETS.garden, photos.map((p) => p.storagePath));
+  return { ...owned, tasks, stages, activities, milestones, harvests, photos: photos.map((p) => ({ ...p, url: urls.get(p.storagePath) ?? null })) };
 }
 
 /** Marks a care task done (logging the activity) or skipped. Checks ownership through the schedule. */
@@ -255,4 +281,30 @@ export async function plansNotInGarden(userId: string) {
   // One per plant: the newest plan wins.
   const seen = new Set<string>();
   return rows.filter((r) => r.suitability !== "unsuitable" && (seen.has(r.slug) ? false : (seen.add(r.slug), true)));
+}
+
+// ── Members' own photos (private bucket; shown through signed, time-limited links) ──
+
+export async function addGardenPhoto(user: SessionUser, gardenPlantId: string, file: File, caption: string | null) {
+  const owned = await ownedGardenPlant(user.id, gardenPlantId);
+  if (!owned) throw new GardenError("We couldn't find that plant.");
+  const problem = await inspectPhoto(file, GARDEN_PHOTO_RULES);
+  if (problem) throw new GardenError(problem);
+  const path = photoPath(`users/${user.id}/${gardenPlantId}`, file.type as keyof typeof IMAGE_TYPES, randomUUID());
+  await uploadTo(BUCKETS.garden, path, file, true);
+  try {
+    await db.insert(plantPhotos).values({ gardenPlantId, storagePath: path, caption });
+  } catch (err) {
+    await removeFrom(BUCKETS.garden, path);
+    throw err;
+  }
+}
+
+export async function removeGardenPhoto(user: SessionUser, gardenPlantId: string, photoId: string) {
+  const owned = await ownedGardenPlant(user.id, gardenPlantId);
+  if (!owned) throw new GardenError("We couldn't find that plant.");
+  const [photo] = await db.select().from(plantPhotos).where(and(eq(plantPhotos.id, photoId), eq(plantPhotos.gardenPlantId, gardenPlantId)));
+  if (!photo) throw new GardenError("Photo not found.");
+  await db.delete(plantPhotos).where(eq(plantPhotos.id, photo.id));
+  await removeFrom(BUCKETS.garden, photo.storagePath);
 }

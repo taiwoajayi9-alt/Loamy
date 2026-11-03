@@ -116,3 +116,8 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - Members record care, milestones, harvests and growth stage; finishing a plant keeps its history.
 - Update (owner): AI-drafted plant sections go straight to "waiting for review" — no manual send per section. "Send all for review" on the plant library (and per plant) sends any remaining drafts in one go. Hand-written edits still save as drafts until sent.
 - Update (owner): super admins can "Approve all" for one plant (every section and care task waiting for review), after ticking a box to confirm they've read it. Logged as a bulk approval. Plant experts still approve one by one.
+
+## 2026-11-03 — Photos
+- Plant photos: uploaded in the admin (at least 1200 px on the shorter side, 3:4 to 3:2), public bucket `plant-images`. The first is the cover on Discover, the plant page and garden cards.
+- Members' photos: private bucket `garden-photos`, stored under each member's own folder, shown only to them through signed links that expire after an hour. Their latest photo replaces the catalogue photo on their garden card.
+- No storage access rules exist for browsers; only the server (secret key) reads or writes files.

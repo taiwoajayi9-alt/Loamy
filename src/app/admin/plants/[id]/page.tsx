@@ -30,6 +30,8 @@ import {
   approveAllAction,
 } from "./actions";
 import { CareRoutine } from "./care-routine";
+import { PlantPhotos } from "./plant-photos";
+import { storageConfigured } from "@/server/storage";
 
 export const metadata: Metadata = { title: "Edit plant" };
 export const dynamic = "force-dynamic";
@@ -60,7 +62,7 @@ export default async function EditPlant({
   const data = await getAdminPlant(id);
   if (!data) notFound();
 
-  const { plant, categories, sections, refs, care, readiness } = data;
+  const { plant, categories, sections, refs, care, images, readiness } = data;
   const latest = latestByType(sections);
   const live = approvedByType(sections);
   const notes = await getReviewNotes([...latest.values()].map((s) => s.id));
@@ -120,6 +122,8 @@ export default async function EditPlant({
           ) : null}
         </form>
       </Card>
+
+      <PlantPhotos plantId={plant.id} images={images} mayEdit={mayEdit} uploadsOn={storageConfigured()} />
 
       {/* ── AI draft ── */}
       {mayEdit ? (
