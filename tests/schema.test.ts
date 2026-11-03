@@ -38,6 +38,13 @@ describe("schema rules", () => {
     expect(cfg.uniqueConstraints.map((u) => u.columns.map((c) => norm(c.name)))).toContainEqual(["provider", "eventid"]);
   });
 
+  it("requires an account on every order and delivery address (no guest checkout)", () => {
+    expect(schema.orders.userId.notNull).toBe(true);
+    expect(schema.deliveryAddresses.userId.notNull).toBe(true);
+    expect(schema.deliveryAddresses.phone.notNull).toBe(true);
+    expect(schema.deliveryAddresses.address.notNull).toBe(true);
+  });
+
   it("does not require a delivery fee at checkout (delivery arranged after order)", () => {
     expect(schema.orders.deliveryFeeMinor.notNull).toBe(false);
   });

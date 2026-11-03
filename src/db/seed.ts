@@ -16,6 +16,12 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as s from "./schema";
 
+// Load .env.local when present (local runs); CI passes env vars directly.
+try {
+  process.loadEnvFile(".env.local");
+} catch {}
+
+
 const url = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
 if (!url) throw new Error("Set DIRECT_URL (or DATABASE_URL) before seeding.");
 

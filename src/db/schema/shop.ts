@@ -143,7 +143,9 @@ export const deliveryAddresses = pgTable(
   "delivery_addresses",
   {
     id: id(),
-    userId: uuid().references(() => users.id, { onDelete: "cascade" }),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     recipient: text().notNull(),
     phone: text().notNull(),
     address: text().notNull(),
@@ -156,7 +158,8 @@ export const deliveryAddresses = pgTable(
 );
 
 /**
- * Owner decision: delivery is arranged after the order is placed.
+ * Owner decisions: shoppers must be signed in with a phone number and delivery address before ordering;
+ * delivery is arranged after the order is placed.
  * Customers pay for items at checkout; admins record the delivery fee, date and notes afterwards.
  */
 export const orders = pgTable(
@@ -164,7 +167,10 @@ export const orders = pgTable(
   {
     id: id(),
     orderNumber: text().notNull().unique("orders_order_number_key"),
-    userId: uuid().references(() => users.id, { onDelete: "set null" }),
+    /** Owner decision: shoppers must have an account. Orders are kept for records, so users with orders can't be hard-deleted. */
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
     deliveryAddressId: uuid().references(() => deliveryAddresses.id, { onDelete: "set null" }),
     buyerContactSnapshot: jsonb().notNull(),
     subtotalMinor: integer().notNull(),
@@ -177,8 +183,6 @@ export const orders = pgTable(
     deliveryScheduledFor: ts(),
     deliveryNotes: text(),
     supportNotes: text(),
-    /** Guest checkout (pending owner approval): hashed token for the order-status link. */
-    guestAccessTokenHash: text(),
     placedAt: ts(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

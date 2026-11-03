@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { TrackEvent } from "@/components/analytics";
 import { EmptyState, HeroCard, Icon, Page, PhotoCard, QuickAction, Tag, Wordmark } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { listPlantCategories, listPublishedPlants } from "@/server/catalogue";
@@ -20,6 +21,11 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Sea
 
   return (
     <Page>
+      <TrackEvent name="discovery_home_viewed" props={{}} />
+      {category ? <TrackEvent name="plant_category_viewed" props={{ category_id: category }} /> : null}
+      {q && plantsRes.ok ? (
+        <TrackEvent name="plant_searched" props={{ search_term: q.slice(0, 64), result_count: plants.length }} />
+      ) : null}
       <header className="flex items-center justify-between">
         <Link href="/discover" className="text-[26px]" aria-label="Loamy home">
           <Wordmark />

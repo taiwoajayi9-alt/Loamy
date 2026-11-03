@@ -13,6 +13,7 @@ import {
 } from "@/db/schema";
 import { env } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { linkAnonymousSession } from "./analytics";
 import { hasEntitlement } from "./entitlements";
 
 export const POLICY_VERSION = "2026-11-03";
@@ -54,6 +55,9 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     }
     return appUser;
   });
+
+  // Link the visitor's anonymous discovery history to the new account, only if they allowed analytics.
+  await linkAnonymousSession(created.id);
 
   return { id: created.id, email: created.email, authProviderId: created.authProviderId };
 });

@@ -15,9 +15,10 @@ requirements and the approved architecture governs implementation.
 | Shop pricing | Customers pay the admin-listed price. AI drafts copy, never prices. | Price on `product_variants.price_minor` |
 | Delivery | Arranged after the order is placed. Checkout charges items only. | `orders.delivery_fee_minor` nullable; `fulfilment_status = awaiting_delivery_arrangement`; `delivery_zones` is admin reference only |
 | Promo codes | Approved | `promo_codes`, `promo_redemptions` |
-| Communication | Happens off-app. WhatsApp (E13) scope still to confirm (LMY-32). | WhatsApp tables kept but unused |
+| Account required to order | No guest checkout. Shoppers sign in and give a phone number and delivery address before ordering. Browsing and the cart stay open. | `orders.user_id` NOT NULL; `/checkout` is signed-in only |
+| Reminders at launch | In-app only. WhatsApp integration (E13) leaves the MVP. | `notifications` table; WhatsApp tables unused |
 | Visual direction | Light warm-grey canvas, white cards, characterful black feature cards (Loamy brand skill) | `src/app/globals.css`, `tailwind.config.ts`, `src/components/ui` |
-| Logo | Proposed v1 hand-a; awaiting approval | `Wordmark` component, `public/icons/*` |
+| Logo | Hand-a wordmark v1 approved | `Wordmark` component, `public/icons/*` |
 
 ## Engineering decisions
 

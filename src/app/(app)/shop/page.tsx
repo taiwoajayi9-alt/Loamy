@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { TrackEvent } from "@/components/analytics";
 import { Card, EmptyState, HeroCard, Icon, Page, PhotoPlaceholder, Tag } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/money";
@@ -17,6 +18,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
 
   return (
     <Page>
+      <TrackEvent name="marketplace_viewed" props={category ? { category_id: category } : {}} />
       <HeroCard className="px-[22px] py-6">
         <Tag tone="lemon" className="self-start">Loamy shop</Tag>
         <h1 className="text-title">Everything to start growing.</h1>

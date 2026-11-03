@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { TrackEvent } from "@/components/analytics";
 import { ButtonLink, EmptyState, Icon, Page, PhotoPlaceholder, Tag } from "@/components/ui";
 import { getPublishedPlant } from "@/server/catalogue";
 
@@ -23,6 +24,7 @@ export default async function PlantPage({ params }: { params: Promise<{ slug: st
 
   return (
     <Page className="gap-5 pt-0">
+      <TrackEvent name="plant_profile_viewed" props={{ plant_id: plant.slug, category: plant.category }} />
       <div className="relative -mx-4">
         <PhotoPlaceholder label={`${plant.commonName.toLowerCase()} in daylight`} className="h-[300px]" />
         <Link

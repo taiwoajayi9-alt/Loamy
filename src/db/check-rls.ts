@@ -5,6 +5,12 @@
  */
 import postgres from "postgres";
 
+// Load .env.local when present (local runs); CI passes env vars directly.
+try {
+  process.loadEnvFile(".env.local");
+} catch {}
+
+
 async function main() {
   const url = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
   if (!url) throw new Error("Set DIRECT_URL (or DATABASE_URL).");
