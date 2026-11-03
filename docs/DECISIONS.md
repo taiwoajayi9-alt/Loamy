@@ -88,3 +88,10 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - The verdict (yes / yes with tweaks / not a good match) is rule-based, never AI. Rules come from each plant's needs (sun, container, water, indoor, climbs) and live in plant_suitability_rules. The launch needs are a starting point for the expert to check.
 - Visitors see the preview with no account. Plans made before sign-up are remembered in a functional cookie (loamy_plans) and attached to the account on the subscribe page.
 - When a plant isn't a match, we suggest up to three published plants that suit the same answers.
+
+## 2026-11-03 — Memberships with Paystack (test mode)
+- Quarterly and Annual memberships use Paystack plans (created automatically to match our prices; recreated if a price changes).
+- Membership switches on only after the server re-verifies the payment with Paystack (exact amount, currency and reference). The browser redirect is never trusted. Replays are ignored.
+- Renewals, subscription codes and cancellations arrive by webhook (signature-checked, each event handled once). Webhooks need a public URL, so they start working once the app is deployed.
+- Cancelling stops renewal at Paystack; access continues until the end of the paid period, plus 3 days' grace on late renewals.
+- Live keys and real charges need the owner's go-ahead.

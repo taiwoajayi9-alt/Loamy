@@ -8,6 +8,9 @@ import { db } from "@/db/client";
 import { subscriptionPlans } from "@/db/schema";
 import { formatNaira } from "@/lib/money";
 import { requireUser, userHasEntitlement } from "@/server/auth";
+import { SubmitButton } from "@/components/submit-button";
+import { paystackConfigured, paystackMode } from "@/server/paystack";
+import { startSubscriptionAction } from "./actions";
 import { claimBrowserPlans, getPlanForViewer, latestPlanForUser } from "@/server/grow";
 
 export const metadata: Metadata = { title: "Choose your plan" };
@@ -25,18 +28,19 @@ function periodLabel(interval: "month" | "year", count: number) {
   return count === 3 ? "every 3 months" : count === 1 ? "a month" : `every ${count} months`;
 }
 
-export default async function SubscribePage({ searchParams }: { searchParams: Promise<{ plan?: string }> }) {
-  const { plan: planParam } = await searchParams;
+export default async function SubscribePage({ searchParams }: { searchParams: Promise<{ plan?: string; error?: string }> }) {
+  const { plan: planParam, error } = await searchParams;
   const user = await requireUser(`/subscribe${planParam ? `?plan=${planParam}` : ""}`);
   await claimBrowserPlans(user.id); // plans made before sign-up now belong to this account
-  const subscribed = await userHasEntitlement(user.id, "full_access");
+  const subscribed = await userHasEntitlement(user.id, "growing_plans");
 
   const fromParam = planParam && z.string().uuid().safeParse(planParam).success ? await getPlanForViewer(planParam, user.id) : null;
   const growPlan = fromParam ? { slug: fromParam.plant.slug, commonName: fromParam.plant.commonName } : await latestPlanForUser(user.id);
 
   const plans = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.active, true)).orderBy(asc(subscriptionPlans.displayOrder));
   const quarterly = plans.find((p) => p.code === "quarterly");
-  const paymentsReady = Boolean(process.env.PAYSTACK_SECRET_KEY);
+  const paymentsReady = paystackConfigured();
+  const testMode = paystackMode() === "test";
 
   return (
     <Page className="pb-12">
@@ -57,6 +61,7 @@ export default async function SubscribePage({ searchParams }: { searchParams: Pr
         </ul>
       </HeroCard>
 
+      {error ? <FormNotice tone="error">{error}</FormNotice> : null}
       {subscribed ? (
         <FormNotice tone="success">You’re already a member. Your full plans are in your garden.</FormNotice>
       ) : null}
@@ -66,7 +71,7 @@ export default async function SubscribePage({ searchParams }: { searchParams: Pr
           const saving = p.code === "annual" && quarterly ? quarterly.priceMinor * 4 - p.priceMinor : 0;
           return (
             <li key={p.id}>
-            <Card className="flex items-center gap-4 p-5">
+            <Card className="flex flex-wrap items-center gap-4 p-5">
               <div className="flex flex-1 flex-col gap-0.5">
                 <div className="flex items-center gap-2">
                   <p className="font-semibold">{p.name}</p>
@@ -78,13 +83,26 @@ export default async function SubscribePage({ searchParams }: { searchParams: Pr
                 <span className="block text-xl font-bold tabular-nums">{formatNaira(p.priceMinor)}</span>
                 <span className="text-small text-ink-muted">{periodLabel(p.billingInterval, p.intervalCount)}</span>
               </p>
+              {paymentsReady && !subscribed ? (
+                <form action={startSubscriptionAction} className="basis-full">
+                  <input type="hidden" name="plan" value={p.code} />
+                  <SubmitButton full size="md" variant={p.code === "annual" ? "lime" : "primary"} pendingLabel="Opening Paystack…">
+                    Choose {p.name} · {formatNaira(p.priceMinor)}
+                  </SubmitButton>
+                </form>
+              ) : null}
             </Card>
             </li>
           );
         })}
       </ul>
 
-      {paymentsReady ? null : (
+      {paymentsReady ? (
+        <p className="text-center text-small text-ink-muted">
+          You’ll pay securely on Paystack. Cancel any time from your profile.
+          {testMode ? " Test mode: use a Paystack test card. No real money moves." : ""}
+        </p>
+      ) : (
         <Card className="flex flex-col gap-1 p-5">
           <p className="font-semibold">Payments open soon</p>
           <p className="text-small text-ink-muted">

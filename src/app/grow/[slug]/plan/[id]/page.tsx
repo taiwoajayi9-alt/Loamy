@@ -41,7 +41,7 @@ export default async function PlanPreview({ params }: { params: Promise<{ slug: 
   if (!data || data.plant.slug !== slug) notFound();
   const { plant, stages, snapshot } = data;
   const outcome = snapshot.outcome;
-  const subscribed = user ? await userHasEntitlement(user.id, "full_access") : false;
+  const subscribed = user ? await userHasEntitlement(user.id, "growing_plans") : false;
   const alternatives = outcome === "unsuitable" ? await suggestAlternatives(snapshot.answers, plant.id) : [];
   const next = `/subscribe?plan=${id}`;
 
