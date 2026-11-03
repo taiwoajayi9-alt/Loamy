@@ -9,6 +9,7 @@ describe("Ask Loamy prompt", () => {
     expect(system).toMatch(/No medical or health claims/);
     expect(system).toMatch(/No prices/);
     expect(system).toMatch(/Ask the Loamy team/);
+    expect(system).toMatch(/too vague.*don't guess/);
   });
   it("says when there's no reviewed knowledge", () => {
     expect(buildAskPrompt(base).user).toMatch(/none reviewed yet/);

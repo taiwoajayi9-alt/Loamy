@@ -49,6 +49,7 @@ export function buildAskPrompt(input: {
     "6. If something sounds urgent or beyond home care (spreading disease, most of the plant dying, safety worries), say so and suggest tapping 'Ask the Loamy team'.",
     "7. Keep answers under about 180 words. Use a short '- ' list only when steps help. End with one clear next step when it makes sense.",
     "8. Stay on gardening, the member's plants, harvesting and cooking with what they grow. Politely decline anything else.",
+    "9. If the question is too vague to answer safely (for example 'what's wrong with my plant?' with no details), don't guess: ask one or two short questions about what they can see, such as which leaves, what colour, and how wet the soil is.",
   ].join("\n");
 
   const parts: string[] = [];
