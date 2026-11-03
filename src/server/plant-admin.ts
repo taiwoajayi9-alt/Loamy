@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import {
@@ -144,6 +144,72 @@ export async function getReviewNotes(sectionIds: string[]): Promise<Map<string, 
   return out;
 }
 
+/** Plants that still have at least one empty section (never started). Published plants are left alone. */
+export async function plantsNeedingDraft() {
+  const rows = await db
+    .select({ id: plants.id, commonName: plants.commonName })
+    .from(plants)
+    .where(and(eq(plants.status, "draft"), eq(plants.isSample, false)))
+    .orderBy(asc(plants.commonName));
+  if (!rows.length) return [];
+  const started = await db
+    .select({ plantId: plantContentSections.plantId, n: sql<number>`count(distinct ${plantContentSections.sectionType})`.mapWith(Number) })
+    .from(plantContentSections)
+    .where(inArray(plantContentSections.plantId, rows.map((r) => r.id)))
+    .groupBy(plantContentSections.plantId);
+  const count = new Map(started.map((s) => [s.plantId, s.n]));
+  return rows.filter((r) => (count.get(r.id) ?? 0) < 6);
+}
+
+export type DraftAllStatus =
+  | { state: "idle" }
+  | { state: "running" | "finished" | "stopped"; total: number; done: number; failed: string[]; current: string | null; reason?: string; startedAt: Date };
+
+/**
+ * Progress of the latest "Draft all plants" run, read from the audit log
+ * so it survives page reloads and works without any extra tables.
+ */
+export async function getDraftAllStatus(): Promise<DraftAllStatus> {
+  const [start] = await db
+    .select()
+    .from(auditLogs)
+    .where(eq(auditLogs.action, "plant.ai_draft_all.start"))
+    .orderBy(desc(auditLogs.createdAt))
+    .limit(1);
+  if (!start) return { state: "idle" };
+  const job = start.after as { plants: { id: string; name: string }[] };
+  const ids = job.plants.map((p) => p.id);
+  const events = await db
+    .select({ action: auditLogs.action, entityId: auditLogs.entityId, after: auditLogs.after, createdAt: auditLogs.createdAt })
+    .from(auditLogs)
+    .where(
+      and(
+        inArray(auditLogs.action, ["plant.ai_draft", "plant.ai_draft_failed", "plant.ai_draft_all.stopped", "plant.ai_draft_all.finished"]),
+        gte(auditLogs.createdAt, start.createdAt),
+      ),
+    )
+    .orderBy(asc(auditLogs.createdAt));
+  const doneIds = new Set(events.filter((e) => (e.action === "plant.ai_draft" || e.action === "plant.ai_draft_failed") && ids.includes(e.entityId)).map((e) => e.entityId));
+  const failed = events
+    .filter((e) => e.action === "plant.ai_draft_failed")
+    .map((e) => job.plants.find((p) => p.id === e.entityId)?.name ?? "A plant");
+  const stopped = events.find((e) => e.action === "plant.ai_draft_all.stopped");
+  const finished = events.some((e) => e.action === "plant.ai_draft_all.finished");
+  const next = job.plants.find((p) => !doneIds.has(p.id));
+  const last = events.length ? events[events.length - 1].createdAt : start.createdAt;
+  // A run with no progress for 10 minutes has died (for example, the server was restarted).
+  const stale = !finished && !stopped && Date.now() - last.getTime() > 10 * 60_000;
+  const base = { total: ids.length, done: doneIds.size, failed, startedAt: start.createdAt };
+  if (stopped) return { ...base, state: "stopped", current: null, reason: (stopped.after as { reason?: string })?.reason };
+  if (finished || !next) return { ...base, state: "finished", current: null };
+  if (stale) return { ...base, state: "stopped", current: null, reason: "It stopped part-way, probably because the app was restarted." };
+  return { ...base, state: "running", current: next.name };
+}
+
+export async function logDraftAll(actor: Actor, action: string, entityId: string, after: unknown) {
+  await db.insert(auditLogs).values({ actorId: actor.id, action, entityType: "plant", entityId, after: after ?? null });
+}
+
 // ── Writes ─────────────────────────────────────────────────────
 
 export type PlantBasics = {
@@ -286,14 +352,15 @@ export async function removeReference(actor: Actor, plantId: string, referenceId
 }
 
 /** Saves an AI draft into sections that aren't approved or in review. Returns which pillars were filled. */
-export async function applyAiDraft(actor: Actor, plantId: string, draft: PlantDraft) {
+export async function applyAiDraft(actor: Actor, plantId: string, draft: PlantDraft, opts: { onlyEmpty?: boolean } = {}) {
   assert(canEditPlants(actor.roles), "You don't have permission to edit plants.");
   return db.transaction(async (tx) => {
     const filled: PillarType[] = [];
     const skipped: PillarType[] = [];
     for (const s of draft.sections) {
       const latest = await latestSection(tx, plantId, s.type);
-      if (!aiMayDraft(latest)) {
+      // Bulk drafting only fills empty sections, so nobody's edits are replaced.
+      if (opts.onlyEmpty ? latest !== undefined : !aiMayDraft(latest)) {
         skipped.push(s.type);
         continue;
       }
