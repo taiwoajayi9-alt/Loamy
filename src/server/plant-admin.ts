@@ -497,3 +497,32 @@ export async function applyAiCareDraft(actor: Actor, plantId: string, tasks: Car
     await audit(tx, actor, "care_template.ai_draft", "plant", plantId, null, { count: tasks.length });
   });
 }
+
+/**
+ * Super admins only: approves every section and care task of one plant that's waiting for review.
+ * Same effect as approving each one, including retiring older approved versions. Audited as a bulk approval.
+ */
+export async function approveAllForPlant(actor: Actor, plantId: string): Promise<{ sections: number; care: number }> {
+  assert(actor.roles.includes("super_admin"), "Only a super admin can approve everything at once.");
+  return db.transaction(async (tx) => {
+    const rows = await tx.select().from(plantContentSections).where(eq(plantContentSections.plantId, plantId)).for("update");
+    const latest = latestByType(rows);
+    const waiting = [...latest.values()].filter((s) => canReview(s));
+    const now = new Date();
+    for (const s of waiting) {
+      await tx
+        .update(plantContentSections)
+        .set({ status: "archived" })
+        .where(and(eq(plantContentSections.plantId, plantId), eq(plantContentSections.sectionType, s.sectionType), sql`${plantContentSections.version} < ${s.version}`, eq(plantContentSections.status, "published")));
+      await tx.update(plantContentSections).set({ status: "published", reviewStatus: "approved", reviewedBy: actor.id, reviewedAt: now }).where(eq(plantContentSections.id, s.id));
+    }
+    const care = await tx
+      .update(careTaskTemplates)
+      .set({ reviewStatus: "approved", status: "published" })
+      .where(and(eq(careTaskTemplates.plantId, plantId), eq(careTaskTemplates.reviewStatus, "pending"), eq(careTaskTemplates.status, "draft")))
+      .returning({ id: careTaskTemplates.id });
+    if (waiting.length || care.length)
+      await audit(tx, actor, "plant.approve_all", "plant", plantId, null, { sections: waiting.map((s) => s.sectionType), careTasks: care.length });
+    return { sections: waiting.length, care: care.length };
+  });
+}

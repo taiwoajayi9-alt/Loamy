@@ -115,3 +115,4 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - Paying for a membership puts the plan they just unlocked straight into their garden.
 - Members record care, milestones, harvests and growth stage; finishing a plant keeps its history.
 - Update (owner): AI-drafted plant sections go straight to "waiting for review" — no manual send per section. "Send all for review" on the plant library (and per plant) sends any remaining drafts in one go. Hand-written edits still save as drafts until sent.
+- Update (owner): super admins can "Approve all" for one plant (every section and care task waiting for review), after ticking a box to confirm they've read it. Logged as a bulk approval. Plant experts still approve one by one.

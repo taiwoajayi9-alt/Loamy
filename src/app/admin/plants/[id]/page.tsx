@@ -27,6 +27,7 @@ import {
   saveBasicsAction,
   saveSectionAction,
   submitAllAction,
+  approveAllAction,
 } from "./actions";
 import { CareRoutine } from "./care-routine";
 
@@ -279,6 +280,24 @@ export default async function EditPlant({
           </Card>
         );
       })}
+
+      {actor.roles.includes("super_admin") && ([...latest.values()].some((s) => sectionState(s) === "in_review") || care.some((c) => c.reviewStatus === "pending")) ? (
+        <Card className="flex flex-col gap-3 border-lemon p-5">
+          <h2 className="text-lg font-semibold">Approve everything for this plant</h2>
+          <p className="text-small text-ink-muted">
+            Approves every section and care task that’s waiting for review. You’re signing off the facts, safety and tone, so read the plant first.
+            Customers see it once the plant is published.
+          </p>
+          <form action={approveAllAction} className="flex flex-col gap-3">
+            <input type="hidden" name="plantId" value={plant.id} />
+            <label className="flex items-start gap-2.5 text-small">
+              <input type="checkbox" name="confirm" value="yes" required className="mt-0.5 h-5 w-5 accent-[#0A0A0A]" />
+              I’ve read this plant’s sections and care routine, and they’re right for Lagos growers.
+            </label>
+            <SubmitButton pendingLabel="Approving…">Approve all</SubmitButton>
+          </form>
+        </Card>
+      ) : null}
 
       <CareRoutine plantId={plant.id} care={care} mayEdit={mayEdit} mayApprove={mayApprove} aiOn={aiOn} />
 

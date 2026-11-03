@@ -10,6 +10,7 @@ import {
   addCareTemplate,
   addSource,
   applyAiCareDraft,
+  approveAllForPlant,
   retireCareTemplate,
   reviewCareTemplate,
   updateCareTemplate,
@@ -257,5 +258,16 @@ export async function submitAllAction(form: FormData) {
   await run(plantId, "sections", async () => {
     const n = await submitAllDrafts(actor, plantId);
     return n ? `Sent ${n} section${n === 1 ? "" : "s"} for review.` : "No drafts to send. Sections are already waiting for review or approved.";
+  });
+}
+
+export async function approveAllAction(form: FormData) {
+  const plantId = uuid.parse(form.get("plantId"));
+  const actor = await requirePlantLibrary(`/admin/plants/${plantId}`);
+  await run(plantId, "sections", async () => {
+    if (form.get("confirm") !== "yes") throw new WorkflowError("Tick the box to confirm you've read this plant's content.");
+    const { sections, care } = await approveAllForPlant(actor, plantId);
+    if (!sections && !care) return "Nothing was waiting for review.";
+    return `Approved ${sections} section${sections === 1 ? "" : "s"} and ${care} care task${care === 1 ? "" : "s"}. Add a source, then publish.`;
   });
 }
