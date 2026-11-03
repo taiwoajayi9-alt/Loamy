@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
-import { auditLogs, inventoryRecords, productCategories, productImages, productVariants, products } from "@/db/schema";
+import { auditLogs, inventoryRecords, productCategories, productImages, productPlantRelations, productVariants, products } from "@/db/schema";
 import { imageSize } from "image-size";
 import { canManageShop, checkDimensions, checkImage, productImagePath, productReadiness, slugify, type IMAGE_TYPES } from "@/lib/product-admin";
 import { requireUser } from "./auth";
@@ -218,5 +218,22 @@ export async function setProductPublished(actor: Actor, id: string, publish: boo
     const variantIds = (await tx.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.productId, id))).map((v) => v.id);
     if (variantIds.length) await tx.update(productVariants).set({ status }).where(inArray(productVariants.id, variantIds));
     await audit(tx, actor, publish ? "product.publish" : "product.unpublish", id, null, { status });
+  });
+}
+
+// ── "Good for these plants" (feeds "What you'll need" on plans and in gardens) ──
+
+export async function getProductPlantIds(productId: string): Promise<string[]> {
+  const rows = await db.select({ plantId: productPlantRelations.plantId }).from(productPlantRelations).where(eq(productPlantRelations.productId, productId));
+  return rows.map((r) => r.plantId);
+}
+
+export async function setProductPlants(actor: Actor, productId: string, plantIds: string[]) {
+  allow(actor);
+  await db.transaction(async (tx) => {
+    const before = (await tx.select({ plantId: productPlantRelations.plantId }).from(productPlantRelations).where(eq(productPlantRelations.productId, productId))).map((r) => r.plantId);
+    await tx.delete(productPlantRelations).where(eq(productPlantRelations.productId, productId));
+    if (plantIds.length) await tx.insert(productPlantRelations).values(plantIds.map((plantId) => ({ productId, plantId, relevanceType: "start_kit" })));
+    await audit(tx, actor, "product.plants", productId, { plantIds: before }, { plantIds });
   });
 }

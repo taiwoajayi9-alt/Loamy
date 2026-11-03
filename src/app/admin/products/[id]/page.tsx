@@ -8,11 +8,15 @@ import { SubmitButton } from "@/components/submit-button";
 import { Card, Field, FormNotice, Tag } from "@/components/ui";
 import { formatNaira } from "@/lib/money";
 import { koboToInput, publicImageUrl } from "@/lib/product-admin";
-import { getAdminProduct, requireShopAdmin } from "@/server/product-admin";
+import { getAdminProduct, getProductPlantIds, requireShopAdmin } from "@/server/product-admin";
+import { db } from "@/db/client";
+import { plants as plantsTable } from "@/db/schema";
+import { asc } from "drizzle-orm";
 import { storageConfigured } from "@/server/storage";
 import {
   addImageAction,
   coverImageAction,
+  productPlantsAction,
   publishProductAction,
   removeImageAction,
   updateProductAction,
@@ -37,6 +41,10 @@ export default async function EditProduct({
   const data = await getAdminProduct(id);
   if (!data) notFound();
   const { product, categories, variant, images, readiness } = data;
+  const [linked, allPlants] = await Promise.all([
+    getProductPlantIds(product.id),
+    db.select({ id: plantsTable.id, name: plantsTable.commonName }).from(plantsTable).orderBy(asc(plantsTable.commonName)),
+  ]);
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const uploadsOn = storageConfigured();
   const live = product.status === "published";
@@ -158,6 +166,24 @@ export default async function EditProduct({
         ) : (
           <FormNotice tone="error">Photo uploads are off. Your developer needs to add SUPABASE_SECRET_KEY.</FormNotice>
         )}
+      </Card>
+
+      {/* ── Plants ── */}
+      <Card className="flex flex-col gap-3 p-5">
+        <h2 id="plants" className="scroll-mt-20 text-lg font-semibold">Good for these plants</h2>
+        <p className="text-small text-ink-muted">Tick the plants this item helps start. It then appears in their “What you’ll need” list on the plan and in members’ gardens, with an Add button. Seedlings and starter packs belong here.</p>
+        <form action={productPlantsAction} className="flex flex-col gap-3">
+          <input type="hidden" name="productId" value={product.id} />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {allPlants.map((p) => (
+              <label key={p.id} className="flex min-h-[44px] items-center gap-2 rounded-2xl border border-line px-3 text-small has-[:checked]:border-ink">
+                <input type="checkbox" name="plantIds" value={p.id} defaultChecked={linked.includes(p.id)} className="h-4 w-4 accent-[#0A0A0A]" />
+                {p.name}
+              </label>
+            ))}
+          </div>
+          <SubmitButton variant="secondary" pendingLabel="Saving…">Save plants</SubmitButton>
+        </form>
       </Card>
 
       {/* ── Publish ── */}

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { TrackEvent } from "@/components/analytics";
-import { Card, FormNotice, HeroCard, Icon, Page, Tag } from "@/components/ui";
+import { ButtonLink, Card, FormNotice, HeroCard, Icon, Page, Tag } from "@/components/ui";
 import { db } from "@/db/client";
 import { subscriptionPlans } from "@/db/schema";
 import { formatNaira } from "@/lib/money";
@@ -11,7 +11,7 @@ import { requireUser, userHasEntitlement } from "@/server/auth";
 import { SubmitButton } from "@/components/submit-button";
 import { paystackConfigured, paystackMode } from "@/server/paystack";
 import { startSubscriptionAction } from "./actions";
-import { claimBrowserPlans, getPlanForViewer, latestPlanForUser } from "@/server/grow";
+import { claimPlanById, claimBrowserPlans, getPlanForViewer, latestPlanForUser } from "@/server/grow";
 
 export const metadata: Metadata = { title: "Choose your plan" };
 export const dynamic = "force-dynamic";
@@ -32,6 +32,7 @@ export default async function SubscribePage({ searchParams }: { searchParams: Pr
   const { plan: planParam, error } = await searchParams;
   const user = await requireUser(`/subscribe${planParam ? `?plan=${planParam}` : ""}`);
   await claimBrowserPlans(user.id); // plans made before sign-up now belong to this account
+  if (planParam && z.string().uuid().safeParse(planParam).success) await claimPlanById(user.id, planParam); // e.g. email confirmed in another browser
   const subscribed = await userHasEntitlement(user.id, "growing_plans");
 
   const fromParam = planParam && z.string().uuid().safeParse(planParam).success ? await getPlanForViewer(planParam, user.id) : null;
@@ -63,7 +64,10 @@ export default async function SubscribePage({ searchParams }: { searchParams: Pr
 
       {error ? <FormNotice tone="error">{error}</FormNotice> : null}
       {subscribed ? (
-        <FormNotice tone="success">You’re already a member. Your full plans are in your garden.</FormNotice>
+        <>
+          <FormNotice tone="success">You’re already a member. Your full plans are in your garden.</FormNotice>
+          <ButtonLink href="/garden" full>Go to my garden</ButtonLink>
+        </>
       ) : null}
 
       <ul className="flex flex-col gap-3" aria-label="Membership options">

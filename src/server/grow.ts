@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { db } from "@/db/client";
 import { growingPlanInputs, growingPlans, plantCategories, plantGrowthStages, plantSuitabilityRules, plants } from "@/db/schema";
@@ -136,4 +136,17 @@ export async function latestPlanForUser(userId: string) {
     .orderBy(desc(growingPlans.createdAt))
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Claims one specific plan by id for a newly signed-in member when it has no owner yet and was made
+ * in the last day. Covers confirming email in a different browser (where the plan cookie is missing).
+ * Plan ids are random UUIDs passed only through the member's own sign-up link.
+ */
+export async function claimPlanById(userId: string, planId: string): Promise<void> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  await db
+    .update(growingPlans)
+    .set({ userId })
+    .where(and(eq(growingPlans.id, planId), isNull(growingPlans.userId), gte(growingPlans.createdAt, since)));
 }

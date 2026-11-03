@@ -34,7 +34,7 @@ export async function login(_: AuthFormState, form: FormData): Promise<AuthFormS
   // Same message for unknown email and wrong password, so accounts can't be probed.
   if (error) return { error: "That email and password don't match. Try again or reset your password." };
 
-  redirect(safeNextPath(form.get("next")?.toString()));
+  redirect(safeNextPath(form.get("next")?.toString(), "/")); // "/" sends members to their garden, others to Discover
 }
 
 export async function register(_: AuthFormState, form: FormData): Promise<AuthFormState> {

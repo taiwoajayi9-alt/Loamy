@@ -13,6 +13,7 @@ import {
   GardenError,
   handleTask,
   logActivity,
+  markPlanted,
   recordHarvest,
   recordMilestone,
   setStage,
@@ -139,4 +140,16 @@ export async function gardenPhotoAction(form: FormData) {
     back(path, "error", errMsg(err));
   }
   back(path, "notice", notice);
+}
+
+export async function plantedAction(form: FormData) {
+  const id = uuid.parse(form.get("gardenPlantId"));
+  const user = await member(`/garden/plants/${id}`);
+  try {
+    const start = z.enum(["seeds", "seedling"]).parse(form.get("start"));
+    await markPlanted(user, id, start, String(form.get("day") || lagosDay(new Date())));
+  } catch (err) {
+    back(`/garden/plants/${id}`, "error", errMsg(err));
+  }
+  back(`/garden/plants/${id}`, "notice", "Planted! Your care plan has started. Your first tasks are below.");
 }

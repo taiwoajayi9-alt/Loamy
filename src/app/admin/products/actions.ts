@@ -11,6 +11,7 @@ import {
   makeCoverImage,
   removeProductImage,
   requireShopAdmin,
+  setProductPlants,
   setProductPublished,
   updateProduct,
 } from "@/server/product-admin";
@@ -112,5 +113,15 @@ export async function publishProductAction(form: FormData) {
   await run(id, "publish", async () => {
     await setProductPublished(actor, id, publish);
     return publish ? "Published. It's now in the shop." : "Unpublished. It's hidden from the shop.";
+  });
+}
+
+export async function productPlantsAction(form: FormData) {
+  const id = uuid.parse(form.get("productId"));
+  const actor = await requireShopAdmin(`/admin/products/${id}`);
+  await run(id, "plants", async () => {
+    const ids = form.getAll("plantIds").map((v) => uuid.parse(v));
+    await setProductPlants(actor, id, [...new Set(ids)]);
+    return ids.length ? `Linked to ${ids.length} plant${ids.length === 1 ? "" : "s"}. It now shows in their “What you’ll need” list.` : "No plants linked.";
   });
 }

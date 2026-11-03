@@ -15,10 +15,10 @@ export const metadata: Metadata = { title: "Profile" };
 export const dynamic = "force-dynamic";
 
 const ROWS: Array<{ label: string; icon: IconName; colour: TileColour; href: string }> = [
-  { label: "Saved plants", icon: "heart", colour: "lemon", href: "/profile" },
-  { label: "Growing spaces", icon: "sprout", colour: "sage", href: "/profile" },
+  { label: "My garden", icon: "sprout", colour: "sage", href: "/garden" },
+  { label: "Ask Loamy", icon: "chat", colour: "lilac", href: "/ask-loamy" },
   { label: "Orders", icon: "bag", colour: "peach", href: "/orders" },
-  { label: "Privacy and data", icon: "shield", colour: "sky", href: "/profile" },
+  { label: "Membership", icon: "heart", colour: "lemon", href: "/subscribe" },
 ];
 
 export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ password?: string; notice?: string; error?: string }> }) {

@@ -10,6 +10,11 @@ import { answerLabel, type Answers } from "@/lib/grow/questions";
 import { OUTCOME_HEADLINE, type Outcome } from "@/lib/grow/suitability";
 import { getSessionUser, userHasEntitlement } from "@/server/auth";
 import { getPlanForViewer, suggestAlternatives } from "@/server/grow";
+import { startKit } from "@/server/start-kit";
+import { StartKitCard } from "@/components/start-kit";
+import { db } from "@/db/client";
+import { gardenPlants } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export const metadata: Metadata = { title: "Your plan preview" };
 export const dynamic = "force-dynamic";
@@ -46,6 +51,8 @@ export default async function PlanPreview({ params }: { params: Promise<{ slug: 
   const subscribed = user ? await userHasEntitlement(user.id, "growing_plans") : false;
   const alternatives = outcome === "unsuitable" ? await suggestAlternatives(snapshot.answers, plant.id) : [];
   const next = `/subscribe?plan=${id}`;
+  const kit = outcome !== "unsuitable" ? await startKit(plant.id, plant.slug, plant.commonName, snapshot.answers.method) : null;
+  const inGarden = user ? await db.query.gardenPlants.findFirst({ where: eq(gardenPlants.planId, id), columns: { id: true } }) : null;
 
   return (
     <Page className="pb-12">
@@ -121,6 +128,8 @@ export default async function PlanPreview({ params }: { params: Promise<{ slug: 
         </Card>
       ) : null}
 
+      {kit ? <StartKitCard items={kit.items} products={kit.products} back={`/grow/${plant.slug}/plan/${id}`} /> : null}
+
       {outcome !== "unsuitable" ? (
         <Card className="flex flex-col gap-4 p-5">
           <div className="flex items-center gap-2">
@@ -137,7 +146,9 @@ export default async function PlanPreview({ params }: { params: Promise<{ slug: 
               </li>
             ))}
           </ul>
-          {subscribed ? (
+          {subscribed && inGarden ? (
+            <ButtonLink href={`/garden/plants/${inGarden.id}`} full>View in my garden</ButtonLink>
+          ) : subscribed ? (
             <form action={addToGardenAction}>
               <input type="hidden" name="planId" value={id} />
               <SubmitButton full size="md" pendingLabel="Adding…">Add to my garden</SubmitButton>

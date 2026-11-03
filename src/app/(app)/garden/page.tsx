@@ -7,7 +7,7 @@ import { ButtonLink, Card, EmptyState, FormNotice, HeroCard, Icon, Page, PhotoPl
 import { env } from "@/lib/env";
 import { BUCKETS, publicUrl } from "@/lib/photos";
 import { getSessionUser, userHasEntitlement } from "@/server/auth";
-import { getGardenOverview, plansNotInGarden } from "@/server/garden";
+import { getGardenOverview, plansNotInGarden, savedGardenCount } from "@/server/garden";
 import { addToGardenAction } from "./actions";
 
 export const metadata: Metadata = { title: "My Garden" };
@@ -23,16 +23,44 @@ export default async function GardenPage({ searchParams }: { searchParams: Promi
   const entitled = user ? await userHasEntitlement(user.id, "my_garden") : false;
 
   if (!user || !entitled) {
+    // Free accounts and lapsed members keep what they saved; show it with one clear next step.
+    const [plans, kept] = user ? await Promise.all([plansNotInGarden(user.id), savedGardenCount(user.id)]) : [[], 0];
     return (
       <Page>
         <h1 className="text-title">My Garden</h1>
-        <PhotoPlaceholder label="herbs on a sunny balcony" className="h-[200px] rounded-card" />
-        <h2 className="text-xl font-bold leading-snug">Your first garden starts with one plant.</h2>
-        <p className="text-ink-muted">
-          Pick a plant you’d love to grow. We’ll check your space and show you a free plan preview first. Members get daily care tasks here.
-        </p>
-        <ButtonLink href="/discover" full>Find a plant to grow</ButtonLink>
-        {user ? <ButtonLink href="/subscribe" variant="secondary" full>See membership options</ButtonLink> : null}
+        {kept > 0 ? (
+          <HeroCard className="gap-3">
+            <Tag tone="lemon" className="self-start">Your garden is saved</Tag>
+            <p className="text-xl font-bold leading-snug">Your {kept} plant{kept === 1 ? " is" : "s are"} waiting for you.</p>
+            <p className="text-ink-on-black">Your membership has ended, so care tasks and Ask Loamy are paused. Everything you logged is kept. Renew to pick up where you left off.</p>
+            <ButtonLink href="/subscribe" variant="lime" full>Renew membership</ButtonLink>
+          </HeroCard>
+        ) : (
+          <>
+            <PhotoPlaceholder label="herbs on a sunny balcony" className="h-[200px] rounded-card" />
+            <h2 className="text-xl font-bold leading-snug">Your first garden starts with one plant.</h2>
+            <p className="text-ink-muted">Pick a plant you’d love to grow. We’ll check your space and show you a free plan preview first. Members get daily care tasks here.</p>
+          </>
+        )}
+        {plans.length ? (
+          <section className="flex flex-col gap-2" aria-labelledby="saved-h">
+            <h2 id="saved-h" className="text-lg font-semibold">Your saved plans</h2>
+            {plans.map((p) => (
+              <Link key={p.id} href={`/grow/${p.slug}/plan/${p.id}`}>
+                <Card className="flex items-center gap-3 p-4 hover:border-line-strong">
+                  <div className="flex-1">
+                    <p className="font-semibold">{p.commonName}</p>
+                    <p className="text-small text-ink-muted">{p.suitability === "conditional" ? "Good with a few tweaks" : "A good match for your space"}</p>
+                  </div>
+                  <Icon name="chevron" size={18} />
+                </Card>
+              </Link>
+            ))}
+            {!kept ? <ButtonLink href="/subscribe" full>Unlock my plan</ButtonLink> : null}
+          </section>
+        ) : null}
+        {!kept && !plans.length ? <ButtonLink href="/discover" full>Find a plant to grow</ButtonLink> : null}
+        {!user ? <ButtonLink href="/login?next=/garden" variant="secondary" full>I already have an account</ButtonLink> : null}
       </Page>
     );
   }
@@ -64,7 +92,13 @@ export default async function GardenPage({ searchParams }: { searchParams: Promi
           </div>
         ) : null}
         <p className="text-small text-ink-on-black">
-          {!plants.length ? "Add your first plant to get daily care tasks." : tasks.length ? "Your plants may be ready for some attention." : "All done for today. Your little garden is coming along."}
+          {!plants.length
+            ? "Add your first plant to get daily care tasks."
+            : tasks.length
+              ? "Your plants may be ready for some attention."
+              : plants.every((p) => !p.plantingDate)
+                ? "Get your plant and a pot ready, then tap “I’ve planted it” to start your care plan."
+                : "All done for today. Your little garden is coming along."}
         </p>
         <div className="mt-1 flex gap-1.5">
           <QuickAction onBlack href="/discover" icon="plus" colour="sky" label="Add plant" />
@@ -117,8 +151,14 @@ export default async function GardenPage({ searchParams }: { searchParams: Promi
                       <PhotoPlaceholder label={p.commonName.toLowerCase()} caption="none" className="h-24 rounded-xl" />
                     )}
                     <p className="font-semibold leading-tight">{p.name}</p>
-                    <p className="text-small text-ink-muted">{p.stage ?? "Growing"}</p>
-                    {p.due ? <Tag tone="lemon" className="self-start">{p.due} to do</Tag> : <span className="flex items-center gap-1 text-small text-leaf-ink"><Icon name="check" size={14} /> All done</span>}
+                    <p className="text-small text-ink-muted">{p.plantingDate ? (p.stage ?? "Growing") : "Getting ready"}</p>
+                    {!p.plantingDate ? (
+                      <Tag tone="peach" className="self-start">Plant it</Tag>
+                    ) : p.due ? (
+                      <Tag tone="lemon" className="self-start">{p.due} to do</Tag>
+                    ) : (
+                      <span className="flex items-center gap-1 text-small text-leaf-ink"><Icon name="check" size={14} /> All done</span>
+                    )}
                   </Card>
                 </Link>
               </li>

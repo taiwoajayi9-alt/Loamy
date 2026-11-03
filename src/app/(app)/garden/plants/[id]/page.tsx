@@ -10,9 +10,11 @@ import { cn } from "@/lib/cn";
 import { daysBetween, HARVEST_UNITS, lagosDay, MILESTONES, TASK_TYPES, taskTypeLabel } from "@/lib/care";
 import { requireEntitlement } from "@/server/auth";
 import { getGardenPlant } from "@/server/garden";
+import { startKit } from "@/server/start-kit";
+import { StartKitCard } from "@/components/start-kit";
 import { PhotoPicker } from "@/components/photo-picker";
 import { storageConfigured } from "@/server/storage";
-import { archivePlantAction, gardenPhotoAction, plantRecordAction } from "../../actions";
+import { archivePlantAction, gardenPhotoAction, plantedAction, plantRecordAction } from "../../actions";
 
 export const metadata: Metadata = { title: "Your plant" };
 export const dynamic = "force-dynamic";
@@ -43,6 +45,8 @@ export default async function GardenPlantPage({ params, searchParams }: { params
   const age = gp.plantingDate ? daysBetween(gp.plantingDate, today) : null;
   const currentIdx = stages.findIndex((s) => s.id === gp.growthStageId);
   const active = gp.status === "active";
+  const gettingReady = active && !gp.plantingDate;
+  const kit = gettingReady ? await startKit(plant.id, plant.slug, plant.commonName, gp.growingMethod) : null;
   const back = `/garden/plants/${id}`;
 
   return (
@@ -55,14 +59,18 @@ export default async function GardenPlantPage({ params, searchParams }: { params
 
       <HeroCard className="gap-3 px-[22px] py-6">
         <div className="flex items-center justify-between gap-2">
-          <Tag tone="lemon">{active ? (stages[currentIdx]?.name ?? "Growing") : gp.status === "completed" ? "Finished" : "Archived"}</Tag>
+          <Tag tone="lemon">{gettingReady ? "Getting ready" : active ? (stages[currentIdx]?.name ?? "Growing") : gp.status === "completed" ? "Finished" : "Archived"}</Tag>
           <Link href={`/plants/${plant.slug}`} className="text-small font-semibold text-ink-on-black underline decoration-lemon underline-offset-4">About {plant.commonName.toLowerCase()}</Link>
         </div>
         <h1 className="text-title">{name}</h1>
-        <div className="flex items-baseline gap-2.5">
-          <span className="text-big tabular-nums">{age ?? "—"}</span>
-          <span className="text-ink-on-black">{age === 1 ? "day" : "days"} growing{gp.plantingDate ? ` · planted ${fmtDay(gp.plantingDate)}` : ""}</span>
-        </div>
+        {gettingReady ? (
+          <p className="text-ink-on-black">Get your {plant.commonName.toLowerCase()} and a pot ready. Your care plan starts the day you plant it.</p>
+        ) : (
+          <div className="flex items-baseline gap-2.5">
+            <span className="text-big tabular-nums">{age ?? "—"}</span>
+            <span className="text-ink-on-black">{age === 1 ? "day" : "days"} growing{gp.plantingDate ? ` · planted ${fmtDay(gp.plantingDate)}` : ""}</span>
+          </div>
+        )}
       </HeroCard>
 
       {active ? (
@@ -76,7 +84,30 @@ export default async function GardenPlantPage({ params, searchParams }: { params
         </Link>
       ) : null}
 
-      {active ? (
+      {gettingReady && kit ? (
+        <>
+          <StartKitCard items={kit.items} products={kit.products} back={back} />
+          <Card className="flex flex-col gap-3 p-5">
+            <h2 className="font-semibold">Planted it?</h2>
+            <form action={plantedAction} className="flex flex-col gap-3">
+              <input type="hidden" name="gardenPlantId" value={id} />
+              <fieldset className="flex flex-col gap-2">
+                <legend className="mb-1 text-small text-ink-muted">What did you plant?</legend>
+                {([["seedling", "A seedling or cutting"], ["seeds", "Seeds"]] as const).map(([v, l], i) => (
+                  <label key={v} className="flex min-h-[48px] cursor-pointer items-center gap-3 rounded-2xl border border-line px-4 has-[:checked]:border-ink has-[:checked]:ring-1 has-[:checked]:ring-ink">
+                    <input type="radio" name="start" value={v} defaultChecked={i === 0} className="h-4 w-4 accent-[#0A0A0A]" />
+                    <span className="text-small font-semibold">{l}</span>
+                  </label>
+                ))}
+              </fieldset>
+              <Field label="When?" name="day" id="planted-day" type="date" max={today} defaultValue={today} />
+              <SubmitButton pendingLabel="Saving…">I’ve planted it</SubmitButton>
+            </form>
+          </Card>
+        </>
+      ) : null}
+
+      {active && !gettingReady ? (
         <section className="flex flex-col gap-3" aria-labelledby="todo-h">
           <h2 id="todo-h" className="text-lg font-semibold">To do</h2>
           {tasks.length ? (
@@ -87,7 +118,7 @@ export default async function GardenPlantPage({ params, searchParams }: { params
         </section>
       ) : null}
 
-      {stages.length ? (
+      {stages.length && !gettingReady ? (
         <Card className="flex flex-col gap-3 p-5">
           <h2 className="font-semibold">Growth stage</h2>
           <ol className="flex flex-col gap-2">
@@ -110,7 +141,7 @@ export default async function GardenPlantPage({ params, searchParams }: { params
         </Card>
       ) : null}
 
-      {active ? (
+      {active && !gettingReady ? (
         <Card className="flex flex-col gap-3 p-5">
           <h2 className="font-semibold">Record something</h2>
           <details className="rounded-2xl bg-chip p-4">

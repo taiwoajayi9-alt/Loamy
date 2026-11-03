@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Loamy — Grow a little joy",
     short_name: "Loamy",
     description: "Choose what you want to grow. We'll help you grow it.",
-    start_url: "/discover",
+    start_url: "/", // members land in their garden, visitors on Discover
     scope: "/",
     display: "standalone",
     background_color: "#f3f3f1",

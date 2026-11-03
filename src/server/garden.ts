@@ -18,7 +18,7 @@ import {
   plantPhotos,
   plants,
 } from "@/db/schema";
-import { dueTasks, lagosDay, type CareTemplate, type TaskType } from "@/lib/care";
+import { daysBetween, dueTasks, lagosDay, type CareTemplate, type TaskType } from "@/lib/care";
 import type { Answers } from "@/lib/grow/questions";
 import { BUCKETS, GARDEN_PHOTO_RULES, photoPath, type IMAGE_TYPES } from "@/lib/photos";
 import { trackServer } from "./analytics";
@@ -56,15 +56,15 @@ export async function addPlanToGarden(user: SessionUser, planId: string): Promis
         .returning();
       newGarden = true;
     }
-    const [first] = await tx.select({ id: plantGrowthStages.id }).from(plantGrowthStages).where(eq(plantGrowthStages.plantId, plant.id)).orderBy(asc(plantGrowthStages.sequence)).limit(1);
+    // Starts as "Getting ready": no planting date, so no care tasks until they tap "I've planted it".
     const [gp] = await tx
       .insert(gardenPlants)
       .values({
         gardenId: garden.id,
         plantId: plant.id,
         planId: plan.id,
-        growthStageId: first?.id ?? null,
-        plantingDate: lagosDay(new Date()),
+        growthStageId: null,
+        plantingDate: null,
         growingMethod: (answers.method as "pot" | "grow_bag" | "ground") ?? "pot",
         status: "active",
       })
@@ -115,7 +115,8 @@ async function syncTasks(gps: { id: string; plantId: string; plantingDate: strin
         if (!last.has(h.templateId) || last.get(h.templateId)! < day) last.set(h.templateId, day);
       }
     const tpl: CareTemplate[] = templates.filter((t) => t.plantId === gp.plantId).map((t) => ({ id: t.id, taskType: t.taskType, title: t.title, instructions: t.instructions, timingRule: t.timingRule as CareTemplate["timingRule"] }));
-    const planted = gp.plantingDate ?? lagosDay(gp.createdAt);
+    if (!gp.plantingDate) continue; // still getting ready: no care tasks yet
+    const planted = gp.plantingDate;
     for (const d of dueTasks(tpl, planted, last, today)) {
       const dueAt = new Date(`${d.dueDay}T08:00:00+01:00`);
       await db
@@ -278,8 +279,14 @@ export async function plansNotInGarden(userId: string) {
     .leftJoin(gardenPlants, eq(gardenPlants.planId, growingPlans.id))
     .where(and(eq(growingPlans.userId, userId), eq(plants.status, "published"), isNull(gardenPlants.id)))
     .orderBy(desc(growingPlans.createdAt));
-  // One per plant: the newest plan wins.
-  const seen = new Set<string>();
+  // One per plant (the newest plan wins), and none for plants already in the garden.
+  const growing = await db
+    .select({ slug: plants.slug })
+    .from(gardenPlants)
+    .innerJoin(gardens, eq(gardens.id, gardenPlants.gardenId))
+    .innerJoin(plants, eq(plants.id, gardenPlants.plantId))
+    .where(and(eq(gardens.userId, userId), eq(gardenPlants.status, "active")));
+  const seen = new Set<string>(growing.map((g) => g.slug));
   return rows.filter((r) => r.suitability !== "unsuitable" && (seen.has(r.slug) ? false : (seen.add(r.slug), true)));
 }
 
@@ -307,4 +314,31 @@ export async function removeGardenPhoto(user: SessionUser, gardenPlantId: string
   if (!photo) throw new GardenError("Photo not found.");
   await db.delete(plantPhotos).where(eq(plantPhotos.id, photo.id));
   await removeFrom(BUCKETS.garden, photo.storagePath);
+}
+
+/** "I've planted it": sets the planting day, the first growth stage, and starts care tasks from that day. */
+export async function markPlanted(user: SessionUser, gardenPlantId: string, start: "seeds" | "seedling", day: string) {
+  const owned = await ownedGardenPlant(user.id, gardenPlantId);
+  if (!owned) throw new GardenError("We couldn't find that plant.");
+  if (owned.gp.plantingDate) return;
+  const today = lagosDay(new Date());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day > today || daysBetween(day, today) > 60) throw new GardenError("Pick the day you planted it (within the last two months).");
+  const stages = await db.select({ id: plantGrowthStages.id, name: plantGrowthStages.name }).from(plantGrowthStages).where(eq(plantGrowthStages.plantId, owned.plant.id)).orderBy(asc(plantGrowthStages.sequence));
+  // Seeds start at the first stage. A seedling or cutting starts at the plant's "seedling" or "rooting" stage if it has one.
+  const stage = (start === "seedling" ? stages.find((s) => /seedling|rooting|cutting|young plant/i.test(s.name)) : undefined) ?? stages[0];
+  await db.transaction(async (tx) => {
+    await tx.update(gardenPlants).set({ plantingDate: day, growthStageId: stage?.id ?? null }).where(eq(gardenPlants.id, gardenPlantId));
+    await tx.insert(plantActivities).values({ gardenPlantId, userId: user.id, activityType: "custom", customLabel: start === "seeds" ? "Sowed the seeds" : "Planted the seedling" });
+  });
+  await trackServer("milestone_recorded", { milestone_type: start === "seeds" ? "sowed" : "planted", plant_id: owned.plant.slug }, user.id);
+}
+
+/** For members whose membership has ended: how many plants are waiting in their garden. */
+export async function savedGardenCount(userId: string): Promise<number> {
+  const [r] = await db
+    .select({ n: sql<number>`count(*)`.mapWith(Number) })
+    .from(gardenPlants)
+    .innerJoin(gardens, eq(gardens.id, gardenPlants.gardenId))
+    .where(and(eq(gardens.userId, userId), eq(gardenPlants.status, "active")));
+  return r?.n ?? 0;
 }

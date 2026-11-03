@@ -128,3 +128,11 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - Uses the same AI provider as drafting (DeepSeek/Gemini). 30 questions per member per Lagos day to keep costs predictable.
 - Members rate answers (helpful or not) and can send a conversation to the Loamy team; requests land in Admin → Help for support admins, plant experts and super admins. Replies happen by phone or email for now.
 - Message text is stored for the member and support only; analytics get event names and context type, never text.
+
+## 2026-11-03 — Getting ready, and journey fixes (owner review)
+- New garden plants start as "Getting ready": no planting date and no care tasks. A short "What you'll need" list (plant material, the right pot size, potting mix, support for climbers) plus any shop items the admin linked to that plant. One button, "I've planted it" (seedling/cutting or seeds, and the day), starts the care plan from that day.
+- No extra question was added to "Can I grow this here?" (keep the flow short).
+- Admin → Shop items → "Good for these plants" links products (e.g. seedlings, starter packs) to plants; they show with an Add button on the plan preview and in Getting ready.
+- Opening the app (and logging in without a destination) takes members to My Garden; visitors to Discover. The installed app starts at "/".
+- My Garden for free accounts shows their saved plans; for lapsed members it says their garden is saved and offers renewal.
+- "Ready to plant" no longer lists plants already growing. Profile rows go to real pages only. A plan made before sign-up is claimed via the sign-up link even if email is confirmed in another browser.
