@@ -94,6 +94,7 @@ export async function listAdminPlants() {
       ...r,
       approved: states.filter((s) => s.reviewStatus === "approved").length,
       inReview: states.filter((s) => s.status === "in_review" && s.reviewStatus === "pending").length,
+      drafts: states.filter((s) => s.status === "draft" && s.reviewStatus === "pending").length,
       started: states.length,
     };
   });
@@ -277,6 +278,29 @@ export async function saveSection(actor: Actor, plantId: string, type: PillarTyp
   });
 }
 
+/** Sends every draft section (not ones sent back with changes requested) for review. One plant, or all plants. */
+export async function submitAllDrafts(actor: Actor, plantId?: string): Promise<number> {
+  assert(canEditPlants(actor.roles), "You don't have permission to edit plants.");
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(plantContentSections)
+      .where(plantId ? eq(plantContentSections.plantId, plantId) : sql`true`);
+    // Only the latest version of each section counts.
+    const latest = new Map<string, typeof rows[number]>();
+    for (const r of rows) {
+      const key = `${r.plantId}:${r.sectionType}`;
+      if (!latest.has(key) || latest.get(key)!.version < r.version) latest.set(key, r);
+    }
+    const toSend = [...latest.values()].filter((r) => r.status === "draft" && r.reviewStatus === "pending");
+    if (toSend.length) {
+      await tx.update(plantContentSections).set({ status: "in_review" }).where(inArray(plantContentSections.id, toSend.map((r) => r.id)));
+      await audit(tx, actor, "plant_section.submit_all", "plant", plantId ?? "all", null, { count: toSend.length });
+    }
+    return toSend.length;
+  });
+}
+
 export async function submitSection(actor: Actor, plantId: string, type: PillarType) {
   assert(canEditPlants(actor.roles), "You don't have permission to edit plants.");
   await db.transaction(async (tx) => {
@@ -367,7 +391,9 @@ export async function applyAiDraft(actor: Actor, plantId: string, draft: PlantDr
         skipped.push(s.type);
         continue;
       }
-      await writeSection(tx, plantId, s.type, s.title, s.body, true);
+      const sectionId = await writeSection(tx, plantId, s.type, s.title, s.body, true);
+      // Owner decision: AI drafts go straight to the expert's review queue.
+      await tx.update(plantContentSections).set({ status: "in_review", reviewStatus: "pending" }).where(eq(plantContentSections.id, sectionId));
       filled.push(s.type);
     }
     await tx.update(plants).set({ aiDrafted: true }).where(eq(plants.id, plantId));

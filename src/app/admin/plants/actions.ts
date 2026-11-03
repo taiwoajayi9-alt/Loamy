@@ -6,7 +6,7 @@ import { after } from "next/server";
 import { canEditPlants } from "@/lib/plant-workflow";
 import { runDraftAll } from "@/server/ai/draft-all";
 import { aiDraftConfigured } from "@/server/ai/plant-draft";
-import { getDraftAllStatus, logDraftAll, plantsNeedingDraft, requirePlantLibrary } from "@/server/plant-admin";
+import { getDraftAllStatus, logDraftAll, plantsNeedingDraft, requirePlantLibrary, submitAllDrafts } from "@/server/plant-admin";
 
 const back = (key: "notice" | "error", msg: string) => redirect(`/admin/plants?${key}=${encodeURIComponent(msg)}`);
 
@@ -25,4 +25,13 @@ export async function draftAllAction() {
   after(() => runDraftAll(actor, list));
   revalidatePath("/admin/plants");
   back("notice", `Drafting ${list.length} plant${list.length === 1 ? "" : "s"}. This page updates as each one finishes.`);
+}
+
+/** Sends every plant's draft sections to the expert in one go. */
+export async function submitAllPlantsAction() {
+  const actor = await requirePlantLibrary("/admin/plants");
+  if (!canEditPlants(actor.roles)) back("error", "You don't have permission to do that.");
+  const n = await submitAllDrafts(actor);
+  revalidatePath("/admin/plants");
+  back("notice", n ? `Sent ${n} draft section${n === 1 ? "" : "s"} for review.` : "No drafts to send.");
 }

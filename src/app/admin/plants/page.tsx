@@ -6,7 +6,7 @@ import { Card, EmptyState, FormNotice, Tag } from "@/components/ui";
 import { canEditPlants, PILLARS } from "@/lib/plant-workflow";
 import { aiDraftConfigured } from "@/server/ai/plant-draft";
 import { getDraftAllStatus, listAdminPlants, plantsNeedingDraft, requirePlantLibrary } from "@/server/plant-admin";
-import { draftAllAction } from "./actions";
+import { draftAllAction, submitAllPlantsAction } from "./actions";
 
 export const metadata: Metadata = { title: "Plant library" };
 export const dynamic = "force-dynamic";
@@ -18,6 +18,7 @@ export default async function AdminPlants({ searchParams }: { searchParams: Prom
   const mayDraft = canEditPlants(actor.roles) && aiDraftConfigured();
   const live = rows.filter((r) => r.status === "published").length;
   const waiting = rows.reduce((n, r) => n + r.inReview, 0);
+  const drafts = rows.reduce((n, r) => n + r.drafts, 0);
 
   return (
     <>
@@ -30,6 +31,17 @@ export default async function AdminPlants({ searchParams }: { searchParams: Prom
 
       {notice ? <FormNotice tone="success">{notice}</FormNotice> : null}
       {error ? <FormNotice tone="error">{error}</FormNotice> : null}
+
+      {drafts > 0 && canEditPlants(actor.roles) ? (
+        <Card className="flex flex-wrap items-center gap-3 p-4">
+          <p className="flex-1 text-small">
+            <span className="font-semibold">{drafts} draft section{drafts === 1 ? "" : "s"}</span> haven’t been sent to the expert yet.
+          </p>
+          <form action={submitAllPlantsAction}>
+            <SubmitButton pendingLabel="Sending…">Send all for review</SubmitButton>
+          </form>
+        </Card>
+      ) : null}
 
       {mayDraft ? (
         <Card className="flex flex-col gap-3 bg-ink p-5 text-white">
@@ -49,7 +61,7 @@ export default async function AdminPlants({ searchParams }: { searchParams: Prom
               {job.state === "finished" ? (
                 <p className="text-small">
                   Last run finished: {job.total - job.failed.length} of {job.total} drafted.
-                  {job.failed.length ? ` Didn’t work: ${job.failed.join(", ")}. Run it again to retry them.` : " Read each one before sending it for review."}
+                  {job.failed.length ? ` Didn’t work: ${job.failed.join(", ")}. Run it again to retry them.` : " They’re waiting for the expert’s review."}
                 </p>
               ) : job.state === "stopped" ? (
                 <p className="text-small">Last run stopped after {job.done} of {job.total}. {job.reason}</p>
@@ -58,7 +70,7 @@ export default async function AdminPlants({ searchParams }: { searchParams: Prom
                 <>
                   <p className="text-small text-ink-on-black">
                     {needing.length} plant{needing.length === 1 ? " has" : "s have"} empty sections. AI fills only the empty ones, one plant at a time,
-                    so anything you’ve written or edited stays as it is. Nothing goes live until it’s approved.
+                    so anything you’ve written or edited stays as it is. Drafts go straight to the expert for review.
                   </p>
                   <form action={draftAllAction}>
                     <SubmitButton variant="lime" pendingLabel="Starting…">

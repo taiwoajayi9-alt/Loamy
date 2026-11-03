@@ -114,3 +114,4 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - Members add a plan to their garden (first garden created from their answers). Tasks are worked out each day in Lagos time; missed occurrences fold into one task rather than piling up. Done logs an activity; Skip doesn't.
 - Paying for a membership puts the plan they just unlocked straight into their garden.
 - Members record care, milestones, harvests and growth stage; finishing a plant keeps its history.
+- Update (owner): AI-drafted plant sections go straight to "waiting for review" — no manual send per section. "Send all for review" on the plant library (and per plant) sends any remaining drafts in one go. Hand-written edits still save as drafts until sent.

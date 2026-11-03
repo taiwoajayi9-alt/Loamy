@@ -21,6 +21,7 @@ import {
   reviewSection,
   saveSection,
   setPlantPublished,
+  submitAllDrafts,
   submitSection,
   updatePlantBasics,
   WorkflowError,
@@ -168,7 +169,7 @@ export async function aiDraftAction(form: FormData) {
     });
     const { filled, skipped } = await applyAiDraft(actor, plantId, draft);
     if (!filled.length) return "Nothing to draft. Every section is approved or waiting for review.";
-    return `AI drafted ${filled.length} section${filled.length === 1 ? "" : "s"}${skipped.length ? `, left ${skipped.length} untouched` : ""}. Read each one before sending it for review.`;
+    return `AI drafted ${filled.length} section${filled.length === 1 ? "" : "s"} and sent ${filled.length === 1 ? "it" : "them"} for review${skipped.length ? `. ${skipped.length} left untouched` : ""}.`;
   });
 }
 
@@ -247,5 +248,14 @@ export async function aiCareDraftAction(form: FormData) {
     });
     await applyAiCareDraft(actor, plantId, draft.tasks);
     return `AI drafted ${draft.tasks.length} care tasks. Read each one before approving.`;
+  });
+}
+
+export async function submitAllAction(form: FormData) {
+  const plantId = uuid.parse(form.get("plantId"));
+  const actor = await requirePlantLibrary(`/admin/plants/${plantId}`);
+  await run(plantId, "sections", async () => {
+    const n = await submitAllDrafts(actor, plantId);
+    return n ? `Sent ${n} section${n === 1 ? "" : "s"} for review.` : "No drafts to send. Sections are already waiting for review or approved.";
   });
 }

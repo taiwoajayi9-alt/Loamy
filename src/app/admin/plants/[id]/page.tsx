@@ -26,6 +26,7 @@ import {
   reviewSectionAction,
   saveBasicsAction,
   saveSectionAction,
+  submitAllAction,
 } from "./actions";
 import { CareRoutine } from "./care-routine";
 
@@ -124,9 +125,17 @@ export default async function EditPlant({
         <Card className="flex flex-col gap-3 bg-ink p-5 text-white">
           <h2 id="sections" className="scroll-mt-20 text-lg font-semibold">Start with an AI draft</h2>
           <p className="text-small text-ink-on-black">
-            AI writes a first draft of every section that isn’t approved or waiting for review. Nothing goes live until an
-            expert approves it. AI never sets prices.
+            AI writes a first draft of every section that isn’t approved or waiting for review, and sends it straight to the expert. Nothing goes live until it’s approved.
           </p>
+          {(() => {
+            const drafts = [...latest.values()].filter((s) => sectionState(s) === "draft").length;
+            return drafts ? (
+              <form action={submitAllAction}>
+                <input type="hidden" name="plantId" value={plant.id} />
+                <SubmitButton variant="lime" pendingLabel="Sending…">Send {drafts} draft{drafts === 1 ? "" : "s"} for review</SubmitButton>
+              </form>
+            ) : null;
+          })()}
           {aiOn ? (
             <form action={aiDraftAction}>
               <input type="hidden" name="plantId" value={plant.id} />
