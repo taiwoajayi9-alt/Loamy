@@ -6,6 +6,7 @@
 export const LEGAL = {
   reviewed: false,
   effective: "3 November 2026",
+  parentCompany: "Kera Wellbeing Company Limited",
   email: "loamy.farm@gmail.com",
   privacyEmail: "loamy.farm@gmail.com",
   instagram: "loamy.farm",
