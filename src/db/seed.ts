@@ -15,10 +15,11 @@
  *
  * Idempotent: re-running updates by slug/code instead of duplicating rows.
  */
-import { eq, sql as dsql } from "drizzle-orm";
+import { and, eq, sql as dsql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as s from "./schema";
+import { rulesForNeeds } from "../lib/grow/suitability";
 import { LAUNCH_PLANTS, LAUNCH_PRODUCTS } from "./launch-catalogue";
 
 // Load .env.local when present (local runs); CI passes env vars directly.
@@ -129,6 +130,18 @@ async function main() {
         setWhere: dsql`${s.plants.isSample} = true`,
       });
   }
+  // Suitability rules (version 1, generated from each plant's needs). Re-seeding refreshes version 1 only.
+  for (const p of LAUNCH_PLANTS) {
+    const plant = await db.query.plants.findFirst({ where: eq(s.plants.slug, p.slug), columns: { id: true } });
+    if (!plant) continue;
+    await db.delete(s.plantSuitabilityRules).where(and(eq(s.plantSuitabilityRules.plantId, plant.id), eq(s.plantSuitabilityRules.ruleVersion, 1)));
+    const rules = rulesForNeeds(p.commonName, p.needs);
+    if (rules.length)
+      await db.insert(s.plantSuitabilityRules).values(
+        rules.map((r) => ({ plantId: plant.id, priority: r.priority, condition: r.condition, outcome: r.outcome, reason: r.reason, ruleVersion: 1, status: "published" as const })),
+      );
+  }
+
   for (const p of LAUNCH_PRODUCTS) {
     const [product] = await db
       .insert(s.products)

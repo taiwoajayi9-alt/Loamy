@@ -82,3 +82,9 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 ## 2026-11-03 — Product photo quality
 - Photos must be near-square (4:5 to 5:4) and at least 1200 × 1200 pixels; 1600 × 1600 is recommended. Over 6000 pixels is refused.
 - JPG, PNG or WebP up to 10 MB. Checked in the browser for instant feedback and again on the server from the real pixels (camera rotation respected).
+
+## 2026-11-03 — "Can I grow this here?" and plan preview
+- Five questions for every plant (space, sun, how you'll grow it, watering, experience). "In the ground" is only offered for a compound.
+- The verdict (yes / yes with tweaks / not a good match) is rule-based, never AI. Rules come from each plant's needs (sun, container, water, indoor, climbs) and live in plant_suitability_rules. The launch needs are a starting point for the expert to check.
+- Visitors see the preview with no account. Plans made before sign-up are remembered in a functional cookie (loamy_plans) and attached to the account on the subscribe page.
+- When a plant isn't a match, we suggest up to three published plants that suit the same answers.
