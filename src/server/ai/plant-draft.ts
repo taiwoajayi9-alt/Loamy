@@ -12,19 +12,41 @@ export async function draftPlantSections(input: PlantDraftInput): Promise<PlantD
   const { system, user } = buildPlantDraftPrompt(input);
   const provider = aiDraftProvider();
   const model = process.env.AI_DRAFT_MODEL;
-  if (provider === "gemini")
-    return parsePlantDraft(
-      await callOpenAiCompatible("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", process.env.GEMINI_API_KEY!, model || "gemini-flash-latest", system, user, {
+  if (provider === "gemini") {
+    // The free tier is often busy. Retry, then fall back to the lighter Flash-Lite model.
+    const models = model ? [model] : ["gemini-flash-latest", "gemini-flash-lite-latest"];
+    const call = (m: string) =>
+      callOpenAiCompatible("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", process.env.GEMINI_API_KEY!, m, system, user, {
         // Gemini Flash "thinks" before answering; keep that short so the six sections fit in the reply.
         reasoning_effort: "low",
-      }),
-    );
+      });
+    return parsePlantDraft(await withRetries(models, call));
+  }
   if (provider === "deepseek")
     return parsePlantDraft(
       await callOpenAiCompatible("DeepSeek", "https://api.deepseek.com/chat/completions", process.env.DEEPSEEK_API_KEY!, model || "deepseek-v4-pro", system, user),
     );
   if (provider === "anthropic") return parsePlantDraft(await callAnthropic(model || "claude-sonnet-5-5", system, user));
   throw new Error("AI drafting is off. Add GEMINI_API_KEY (free) or DEEPSEEK_API_KEY to turn it on.");
+}
+
+class BusyError extends Error {}
+
+/** Tries each model in turn, retrying busy responses with short waits. */
+async function withRetries(models: string[], call: (model: string) => Promise<string>): Promise<string> {
+  let last: unknown;
+  for (const m of models) {
+    for (const wait of [0, 3000, 8000]) {
+      if (wait) await new Promise((r) => setTimeout(r, wait));
+      try {
+        return await call(m);
+      } catch (err) {
+        last = err;
+        if (!(err instanceof BusyError)) throw err;
+      }
+    }
+  }
+  throw last instanceof Error ? new Error(last.message) : new Error("AI drafting failed. Try again in a minute.");
 }
 
 /** Gemini and DeepSeek both accept the OpenAI chat-completions format. */
@@ -63,6 +85,7 @@ async function callOpenAiCompatible(
   if (res.status === 404) throw new Error(`AI drafting failed: ${name} doesn't recognise the model "${model}". Set AI_DRAFT_MODEL in .env.local.`);
   if (res.status === 402) throw new Error(`AI drafting failed: the ${name} account is out of credit.`);
   if (res.status === 429) throw new Error(`AI drafting failed: ${name}'s free limit was reached. Wait a minute (or until tomorrow) and try again.`);
+  if (res.status >= 500) throw new BusyError(`AI drafting failed: ${name} is busy right now (${res.status}). Try again in a minute.`);
   if (!res.ok) throw new Error(`AI drafting failed (${name} ${res.status}). Try again in a minute.`);
   const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   return body.choices?.[0]?.message?.content ?? "";
