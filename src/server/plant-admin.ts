@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import {
@@ -411,6 +411,46 @@ export async function removeReference(actor: Actor, plantId: string, referenceId
     await tx.delete(plantReferences).where(eq(plantReferences.id, referenceId));
     await audit(tx, actor, "plant_source.remove", "plant_reference", referenceId, ref, null);
   });
+}
+
+/** Draft plants (not samples) with no care routine yet (retired tasks don't count). */
+export async function plantsNeedingCare() {
+  const rows = await db
+    .select({ id: plants.id, commonName: plants.commonName })
+    .from(plants)
+    .where(and(eq(plants.status, "draft"), eq(plants.isSample, false)))
+    .orderBy(asc(plants.commonName));
+  if (!rows.length) return [];
+  const withCare = await db
+    .selectDistinct({ plantId: careTaskTemplates.plantId })
+    .from(careTaskTemplates)
+    .where(and(inArray(careTaskTemplates.plantId, rows.map((r) => r.id)), ne(careTaskTemplates.status, "archived")));
+  const has = new Set(withCare.map((r) => r.plantId));
+  return rows.filter((r) => !has.has(r.id));
+}
+
+/**
+ * Owner-only launch shortcut: approves everything waiting for review on every draft plant,
+ * then publishes each plant that's ready. Plants that still miss something are listed, not published.
+ */
+export async function approveAndPublishAll(actor: Actor) {
+  assert(actor.roles.includes("super_admin"), "Only the owner can approve and publish everything at once.");
+  const list = await db
+    .select({ id: plants.id, name: plants.commonName })
+    .from(plants)
+    .where(and(eq(plants.status, "draft"), eq(plants.isSample, false)))
+    .orderBy(asc(plants.commonName));
+  const published: string[] = [];
+  const notReady: { name: string; missing: string[] }[] = [];
+  for (const p of list) {
+    await approveAllForPlant(actor, p.id);
+    const data = await getAdminPlant(p.id);
+    if (data?.readiness.ready) {
+      await setPlantPublished(actor, p.id, true);
+      published.push(p.name);
+    } else notReady.push({ name: p.name, missing: data?.readiness.missing ?? ["Plant not found"] });
+  }
+  return { published, notReady };
 }
 
 /** Draft plants (not samples) with no sources at all, for the AI to suggest some. */

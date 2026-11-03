@@ -1,4 +1,6 @@
 import "server-only";
+import { membershipRenewedEmail, membershipStartedEmail, type Email } from "@/lib/email/messages";
+import { sendEmail, siteUrl } from "./email";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
@@ -8,12 +10,14 @@ import {
   subscriptionEntitlements,
   subscriptionPlans,
   subscriptions,
+  userProfiles,
   users,
 } from "@/db/schema";
 import { accessUntil, addPeriod, chargeMatches, paymentReference, paystackInterval } from "@/lib/billing";
 import { entitlementsForSet } from "./entitlements";
 import { trackServer } from "./analytics";
 import { confirmOrderPayment } from "./checkout";
+import { applyRefundEvent } from "./refunds";
 import { paystack, PaystackError } from "./paystack";
 import type { SessionUser } from "./auth";
 
@@ -65,7 +69,7 @@ export async function startSubscription(user: SessionUser, planCode: string, sit
  */
 export async function confirmSubscriptionPayment(reference: string): Promise<{ ok: true; planName: string } | { ok: false; reason: string }> {
   const charge = await paystack.verify(reference);
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [payment] = await tx.select().from(paymentTransactions).where(eq(paymentTransactions.reference, reference)).for("update");
     if (!payment || payment.purpose !== "subscription" || !payment.userId) return { ok: false as const, reason: "We couldn't find that payment." };
     const meta = (charge.metadata ?? {}) as { plan_code?: string };
@@ -101,13 +105,39 @@ export async function confirmSubscriptionPayment(reference: string): Promise<{ o
       .set({ status: "cancelled" })
       .where(and(eq(subscriptions.userId, payment.userId), eq(subscriptions.status, "active"), eq(subscriptions.cancelAtPeriodEnd, true)));
     await trackServer("subscription_activated", { plan_type: plan.code, transaction_id: payment.id }, payment.userId);
-    return { ok: true as const, planName: plan.name };
+    return { ok: true as const, planName: plan.name, firstTime: { userId: payment.userId, amountMinor: payment.amountMinor, periodEnd, subId: sub.id } };
   });
+  if (result.ok && "firstTime" in result && result.firstTime) {
+    const f = result.firstTime;
+    await membershipEmail(f.userId, `membership-start-${f.subId}`, (firstName) =>
+      membershipStartedEmail({ site: siteUrl(), firstName, planName: result.planName, amountMinor: f.amountMinor, renewsOn: f.periodEnd }),
+    );
+  }
+  return result.ok ? { ok: true, planName: result.planName } : result;
+}
+
+async function membershipEmail(userId: string, key: string, build: (firstName: string | null) => Email) {
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  if (!user || user.status === "deleted") return;
+  const profile = await db.query.userProfiles.findFirst({ where: eq(userProfiles.userId, userId) });
+  await sendEmail(user.email, build(profile?.firstName ?? null), key);
 }
 
 /** Renewal charges arrive by webhook with Paystack's own reference. Extend the member's access. */
 async function applyRenewal(data: { reference: string; customer?: { email?: string }; plan?: { plan_code?: string } }) {
   const charge = await paystack.verify(data.reference);
+  let renewed: { userId: string; planName: string; amountMinor: number; periodEnd: Date } | null = null;
+  const outcome = await applyRenewalTx(charge, (r) => (renewed = r));
+  if (renewed) {
+    const r: { userId: string; planName: string; amountMinor: number; periodEnd: Date } = renewed;
+    await membershipEmail(r.userId, `membership-renew-${charge.reference}`, (firstName) =>
+      membershipRenewedEmail({ site: siteUrl(), firstName, planName: r.planName, amountMinor: r.amountMinor, renewsOn: r.periodEnd }),
+    );
+  }
+  return outcome;
+}
+
+async function applyRenewalTx(charge: Awaited<ReturnType<typeof paystack.verify>>, onRenewed: (r: { userId: string; planName: string; amountMinor: number; periodEnd: Date }) => void) {
   const email = charge.customer?.email?.toLowerCase();
   const planCode = typeof charge.plan === "object" ? charge.plan?.plan_code : charge.plan;
   if (!email || !planCode || charge.status !== "success") return "ignored";
@@ -139,7 +169,8 @@ async function applyRenewal(data: { reference: string; customer?: { email?: stri
       verifiedAt: new Date(),
       rawVerification: slim(charge),
     });
-    return "processed";
+    onRenewed({ userId: user.id, planName: plan.name, amountMinor: charge.amount, periodEnd });
+    return "processed" as const;
   });
 }
 
@@ -167,6 +198,8 @@ export async function handlePaystackEvent(evt: WebhookEvent, payloadHash: string
       status = await syncSubscriptionEvent(evt);
     } else if (evt.event === "invoice.payment_failed") {
       status = await markPastDue(evt);
+    } else if (evt.event.startsWith("refund.")) {
+      status = await applyRefundEvent(evt);
     }
   } catch (err) {
     status = "failed";

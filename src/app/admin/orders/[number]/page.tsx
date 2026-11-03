@@ -8,7 +8,9 @@ import { koboToInput } from "@/lib/product-admin";
 import { FULFILMENT_LABEL, formatPhone } from "@/lib/shop";
 import { getAdminOrder } from "@/server/order-admin";
 import { requireShopAdmin } from "@/server/product-admin";
-import { updateOrderAction } from "../actions";
+import { listRefunds } from "@/server/refunds";
+import { refundableMinor } from "@/lib/shop";
+import { refundOrderAction, updateOrderAction } from "../actions";
 
 export const metadata: Metadata = { title: "Order" };
 export const dynamic = "force-dynamic";
@@ -26,6 +28,9 @@ export default async function AdminOrder({ params, searchParams }: { params: Pro
   const { order, items, history } = data;
   const c = order.buyerContactSnapshot as { recipient: string; phone: string; address: string; area: string; email: string; promoCode?: string | null };
   const paid = order.paymentStatus === "paid";
+  const refunds = await listRefunds(order.id);
+  const refundable = ["paid", "partially_refunded"].includes(order.paymentStatus) ? refundableMinor(order.itemsTotalMinor, refunds) : 0;
+  const REFUND_STATUS = { requested: "Requested", processing: "Processing", succeeded: "Refunded", failed: "Failed" } as const;
 
   return (
     <>
@@ -84,6 +89,44 @@ export default async function AdminOrder({ params, searchParams }: { params: Pro
               <SubmitButton pendingLabel="Saving…">Save</SubmitButton>
             </div>
           </form>
+        </Card>
+      ) : null}
+
+      {refundable > 0 || refunds.length ? (
+        <Card className="flex flex-col gap-3 p-5">
+          <h2 className="font-semibold">Refunds</h2>
+          {refunds.length ? (
+            <ul className="flex flex-col gap-1.5 text-small">
+              {refunds.map((r) => (
+                <li key={r.id} className="flex flex-wrap items-center gap-2">
+                  <Tag tone={r.status === "succeeded" ? "leaf" : r.status === "failed" ? "peach" : "lemon"}>{REFUND_STATUS[r.status]}</Tag>
+                  <span className="tabular-nums">{formatNaira(r.amountMinor)}</span>
+                  <span className="text-ink-muted">· {r.reason} · {fmt.format(r.createdAt)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {refundable > 0 ? (
+            <details className="rounded-2xl bg-chip p-4">
+              <summary className="cursor-pointer text-small font-semibold">Refund this order</summary>
+              <form action={refundOrderAction} className="mt-3 grid gap-4 sm:grid-cols-2">
+                <input type="hidden" name="number" value={order.orderNumber} />
+                <Field label="Amount (₦)" name="amount" inputMode="decimal" required defaultValue={koboToInput(refundable)} hint={`Up to ${formatNaira(refundable)}. The delivery fee was collected separately, so it isn’t refunded here.`} />
+                <Field label="Reason" name="reason" required placeholder="e.g. Arrived damaged" maxLength={200} />
+                <label className="flex items-start gap-2.5 text-small sm:col-span-2">
+                  <input type="checkbox" name="restock" value="yes" defaultChecked={order.fulfilmentStatus !== "delivered"} className="mt-0.5 h-5 w-5 accent-[#0A0A0A]" />
+                  Put the items back in stock (full refunds of undelivered orders only)
+                </label>
+                <label className="flex items-start gap-2.5 text-small sm:col-span-2">
+                  <input type="checkbox" name="confirm" value="yes" required className="mt-0.5 h-5 w-5 accent-[#0A0A0A]" />
+                  Send this refund through Paystack now. It can’t be undone.
+                </label>
+                <div className="sm:col-span-2">
+                  <SubmitButton pendingLabel="Refunding…">Refund</SubmitButton>
+                </div>
+              </form>
+            </details>
+          ) : null}
         </Card>
       ) : null}
 

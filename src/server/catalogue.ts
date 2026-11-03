@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, eq, ilike, inArray, min, or, sql } from "drizzle-orm";
 import { approvedByType, PILLARS } from "@/lib/plant-workflow";
+import { likeTerm } from "@/lib/search";
 import { db } from "@/db/client";
 import {
   inventoryRecords,
@@ -10,6 +11,8 @@ import {
   plantReferences,
   plantSources,
   plants,
+  productPlantRelations,
+  savedPlants,
   productCategories,
   productImages,
   productVariants,
@@ -31,14 +34,24 @@ async function load<T>(fn: () => Promise<T>): Promise<Loaded<T>> {
 const PAGE_SIZE = 20;
 
 /** Published plants only, searched and paged on the server (never load the full catalogue). */
-export function listPublishedPlants(opts: { category?: string; q?: string; limit?: number } = {}) {
+export function listPublishedPlants(opts: { category?: string; q?: string; limit?: number; savedBy?: string } = {}) {
   return load(async () => {
     const filters = [eq(plants.status, "published")];
     if (opts.category) filters.push(eq(plantCategories.slug, opts.category));
-    if (opts.q) {
-      const term = `%${opts.q.trim()}%`;
-      filters.push(or(ilike(plants.commonName, term), ilike(plants.summaryLine, term))!);
+    if (opts.q?.trim()) {
+      const term = likeTerm(opts.q);
+      // Local names matter in Lagos: "efirin" should find scent leaf, "ila" should find okra.
+      filters.push(
+        or(
+          ilike(plants.commonName, term),
+          ilike(plants.summaryLine, term),
+          ilike(plants.botanicalName, term),
+          sql`array_to_string(${plants.localNames}, ' ') ilike ${term}`,
+          ilike(plantCategories.name, term),
+        )!,
+      );
     }
+    if (opts.savedBy) filters.push(sql`exists (select 1 from ${savedPlants} where ${savedPlants.plantId} = ${plants.id} and ${savedPlants.userId} = ${opts.savedBy})`);
     return db
       .select({
         slug: plants.slug,
@@ -94,10 +107,22 @@ export function getPublishedPlant(slug: string) {
 }
 
 /** Published products with their lowest published variant price and total stock. */
-export function listPublishedProducts(opts: { category?: string; limit?: number } = {}) {
+export function listPublishedProducts(opts: { category?: string; q?: string; limit?: number } = {}) {
   return load(async () => {
     const filters = [eq(products.status, "published"), eq(productVariants.status, "published")];
     if (opts.category) filters.push(eq(productCategories.slug, opts.category));
+    if (opts.q?.trim()) {
+      const term = likeTerm(opts.q);
+      filters.push(
+        or(
+          ilike(products.name, term),
+          ilike(products.description, term),
+          ilike(productCategories.name, term),
+          // "basil" finds the herb starter pack through the plants it's linked to.
+          sql`exists (select 1 from ${productPlantRelations} r join ${plants} p on p.id = r.plant_id where r.product_id = ${products.id} and (p.common_name ilike ${term} or array_to_string(p.local_names, ' ') ilike ${term}))`,
+        )!,
+      );
+    }
     return db
       .select({
         slug: products.slug,

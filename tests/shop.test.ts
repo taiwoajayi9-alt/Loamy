@@ -48,3 +48,25 @@ describe("order numbers", () => {
     expect(n).toMatch(/^LMY-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/);
   });
 });
+
+import { paymentStatusAfterRefunds, refundableMinor, refundStatusFromPaystack } from "@/lib/shop";
+
+describe("refunds", () => {
+  it("counts everything except failed refunds", () => {
+    const r = [
+      { amountMinor: 2000, status: "succeeded" as const },
+      { amountMinor: 1000, status: "processing" as const },
+      { amountMinor: 5000, status: "failed" as const },
+    ];
+    expect(refundableMinor(10_000, r)).toBe(7000);
+    expect(paymentStatusAfterRefunds(10_000, r)).toBe("partially_refunded");
+    expect(paymentStatusAfterRefunds(3000, r)).toBe("refunded");
+    expect(paymentStatusAfterRefunds(3000, [])).toBe("paid");
+    expect(refundableMinor(2000, r)).toBe(0);
+  });
+  it("maps Paystack statuses", () => {
+    expect(refundStatusFromPaystack("processed")).toBe("succeeded");
+    expect(refundStatusFromPaystack("pending")).toBe("processing");
+    expect(refundStatusFromPaystack("failed")).toBe("failed");
+  });
+});

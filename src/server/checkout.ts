@@ -1,4 +1,6 @@
 import "server-only";
+import { newOrderAlertEmail, orderConfirmedEmail } from "@/lib/email/messages";
+import { sendEmail, siteUrl, teamInbox } from "./email";
 import { randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { db } from "@/db/client";
@@ -172,7 +174,7 @@ export async function placeOrder(user: SessionUser, details: DeliveryDetails, pr
 /** Confirms an order payment with Paystack. Safe to call from the callback page and the webhook. */
 export async function confirmOrderPayment(reference: string): Promise<{ ok: true; orderNumber: string } | { ok: false; reason: string; orderNumber?: string }> {
   const charge = await paystack.verify(reference);
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [payment] = await tx.select().from(paymentTransactions).where(eq(paymentTransactions.reference, reference)).for("update");
     if (!payment || payment.purpose !== "order" || !payment.orderId) return { ok: false as const, reason: "We couldn't find that payment." };
     const [order] = await tx.select().from(orders).where(eq(orders.id, payment.orderId)).for("update");
@@ -225,8 +227,28 @@ export async function confirmOrderPayment(reference: string): Promise<{ ok: true
       if (p) await tx.insert(promoRedemptions).values({ promoCodeId: p.id, userId: order.userId, orderId: order.id, discountMinor: order.discountMinor });
     }
     await trackServer("order_completed", { order_id: order.id, value: order.itemsTotalMinor }, order.userId);
-    return { ok: true as const, orderNumber: order.orderNumber };
+    return { ok: true as const, orderNumber: order.orderNumber, firstTime: { order, items } };
   });
+  // Emails go out once, after the payment is safely recorded (callback and webhook can both get here).
+  if (result.ok && "firstTime" in result && result.firstTime) await sendOrderEmails(result.firstTime.order, result.firstTime.items);
+  return result.ok ? { ok: true, orderNumber: result.orderNumber } : result;
+}
+
+async function sendOrderEmails(order: typeof orders.$inferSelect, items: (typeof orderItems.$inferSelect)[]) {
+  const c = order.buyerContactSnapshot as { recipient: string; phone: string; address: string; area: string; email: string };
+  const profile = await db.query.userProfiles.findFirst({ where: eq(userProfiles.userId, order.userId) });
+  const input = {
+    site: siteUrl(),
+    orderNumber: order.orderNumber,
+    firstName: profile?.firstName ?? null,
+    phone: c.phone,
+    items: items.map((i) => ({ name: i.variantNameSnapshot && i.variantNameSnapshot !== "Default" ? `${i.productNameSnapshot} (${i.variantNameSnapshot})` : i.productNameSnapshot, quantity: i.quantity, lineTotalMinor: i.lineTotalMinor })),
+    subtotalMinor: order.subtotalMinor,
+    discountMinor: order.discountMinor,
+    totalMinor: order.itemsTotalMinor,
+  };
+  if (c.email) await sendEmail(c.email, orderConfirmedEmail(input), `order-confirmed-${order.id}`);
+  await sendEmail(teamInbox(), newOrderAlertEmail({ ...input, recipient: c.recipient, address: c.address, area: c.area }), `order-alert-${order.id}`);
 }
 
 export async function listOrders(userId: string) {

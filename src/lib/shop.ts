@@ -91,3 +91,27 @@ export const FULFILMENT_LABEL: Record<string, string> = {
   delivered: "Delivered",
   cancelled: "Cancelled",
 };
+
+// ── Refunds ────────────────────────────────────────────────────
+
+export type RefundLike = { amountMinor: number; status: "requested" | "processing" | "succeeded" | "failed" };
+
+/** How much of an order's item total can still be refunded. Failed refunds don't count. */
+export function refundableMinor(itemsTotalMinor: number, refunds: RefundLike[]): number {
+  const used = refunds.filter((r) => r.status !== "failed").reduce((n, r) => n + r.amountMinor, 0);
+  return Math.max(itemsTotalMinor - used, 0);
+}
+
+/** The order's payment status once refunds are counted. */
+export function paymentStatusAfterRefunds(itemsTotalMinor: number, refunds: RefundLike[]): "paid" | "partially_refunded" | "refunded" {
+  const left = refundableMinor(itemsTotalMinor, refunds);
+  if (left === itemsTotalMinor) return "paid";
+  return left === 0 ? "refunded" : "partially_refunded";
+}
+
+/** Maps Paystack's refund status onto ours. */
+export function refundStatusFromPaystack(s: string): RefundLike["status"] {
+  if (s === "processed") return "succeeded";
+  if (s === "failed" || s === "reversed") return "failed";
+  return "processing";
+}

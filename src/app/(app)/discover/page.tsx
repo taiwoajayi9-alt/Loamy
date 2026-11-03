@@ -1,21 +1,48 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { TrackEvent } from "@/components/analytics";
-import { EmptyState, HeroCard, Icon, Page, PhotoCard, QuickAction, Tag, Wordmark } from "@/components/ui";
+import {
+  EmptyState,
+  HeroCard,
+  Icon,
+  Page,
+  PhotoCard,
+  QuickAction,
+  Tag,
+  Wordmark,
+} from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { BUCKETS, publicUrl } from "@/lib/photos";
+import { getSessionUser } from "@/server/auth";
 import { listPlantCategories, listPublishedPlants } from "@/server/catalogue";
+import { savedCount } from "@/server/saved";
 
 export const metadata: Metadata = { title: "Discover" };
 export const dynamic = "force-dynamic";
 
-type Search = Promise<{ category?: string; q?: string; unlock?: string }>;
+type Search = Promise<{
+  category?: string;
+  q?: string;
+  unlock?: string;
+  saved?: string;
+}>;
 
-export default async function DiscoverPage({ searchParams }: { searchParams: Search }) {
-  const { category, q, unlock } = await searchParams;
-  const [plantsRes, catsRes] = await Promise.all([
-    listPublishedPlants({ category, q }),
+export default async function DiscoverPage({
+  searchParams,
+}: {
+  searchParams: Search;
+}) {
+  const { category, q, unlock, saved } = await searchParams;
+  const user = await getSessionUser().catch(() => null);
+  const showSaved = Boolean(user && saved);
+  const [plantsRes, catsRes, nSaved] = await Promise.all([
+    listPublishedPlants({
+      category,
+      q,
+      savedBy: showSaved ? user!.id : undefined,
+    }),
     listPlantCategories(),
+    user ? savedCount(user.id).catch(() => 0) : Promise.resolve(0),
   ]);
   const plants = plantsRes.ok ? plantsRes.data : [];
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -24,9 +51,17 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Sea
   return (
     <Page>
       <TrackEvent name="discovery_home_viewed" props={{}} />
-      {category ? <TrackEvent name="plant_category_viewed" props={{ category_id: category }} /> : null}
+      {category ? (
+        <TrackEvent
+          name="plant_category_viewed"
+          props={{ category_id: category }}
+        />
+      ) : null}
       {q && plantsRes.ok ? (
-        <TrackEvent name="plant_searched" props={{ search_term: q.slice(0, 64), result_count: plants.length }} />
+        <TrackEvent
+          name="plant_searched"
+          props={{ search_term: q.slice(0, 64), result_count: plants.length }}
+        />
       ) : null}
       <header className="flex items-center justify-between">
         <Link href="/discover" className="text-[26px]" aria-label="Loamy home">
@@ -42,25 +77,69 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Sea
       </header>
 
       {unlock ? (
-        <p role="status" className="rounded-2xl bg-[#fbe3cf] px-4 py-3 text-small text-[#5c3410]">
-          My Garden and Ask Loamy come with a subscription. Start with a free plan preview for any plant.
+        <p
+          role="status"
+          className="rounded-2xl bg-[#fbe3cf] px-4 py-3 text-small text-[#5c3410]"
+        >
+          My Garden and Ask Loamy come with a subscription. Start with a free
+          plan preview for any plant.
         </p>
       ) : null}
 
-      <HeroCard className="gap-3.5 px-[22px] pb-[22px] pt-[26px]">
-        <Tag tone="lemon" className="self-start">Grow a little joy</Tag>
-        <h1 className="text-hero">Your balcony can do more than look good.</h1>
-        <p className="text-ink-on-black">Choose what you want to grow. We&apos;ll help you grow it.</p>
-        <div className="mt-1.5 flex gap-1.5">
-          <QuickAction onBlack href="#search" icon="search" colour="lemon" label="Find a plant" />
-          <QuickAction onBlack href="/plants/sweet-basil" icon="sun" colour="peach" label="Can I grow it?" />
-          <QuickAction onBlack href="/shop?category=starter-kits" icon="bag" colour="sky" label="Starter kits" />
-          <QuickAction onBlack href="/garden" icon="chat" colour="lilac" label="Ask Loamy" />
-        </div>
-      </HeroCard>
+      {/* While searching or viewing saved plants, results come first instead of the welcome card. */}
+      {q || showSaved ? null : (
+        <HeroCard className="gap-3.5 px-[22px] pb-[22px] pt-[26px]">
+          <Tag tone="lemon" className="self-start">
+            Grow a little joy
+          </Tag>
+          <h1 className="text-hero">
+            Your balcony can do more than look good.
+          </h1>
+          <p className="text-ink-on-black">
+            Choose what you want to grow. We&apos;ll help you grow it.
+          </p>
+          <div className="mt-1.5 flex gap-1.5">
+            <QuickAction
+              onBlack
+              href="#search"
+              icon="search"
+              colour="lemon"
+              label="Find a plant"
+            />
+            <QuickAction
+              onBlack
+              href="/plants/sweet-basil"
+              icon="sun"
+              colour="peach"
+              label="Can I grow it?"
+            />
+            <QuickAction
+              onBlack
+              href="/shop?category=starter-kits"
+              icon="bag"
+              colour="sky"
+              label="Starter kits"
+            />
+            <QuickAction
+              onBlack
+              href="/garden"
+              icon="chat"
+              colour="lilac"
+              label="Ask Loamy"
+            />
+          </div>
+        </HeroCard>
+      )}
 
-      <form id="search" action="/discover" role="search" className="flex items-center gap-2.5 rounded-full border border-line-strong bg-card px-4">
-        <label htmlFor="q" className="sr-only">Search plants</label>
+      <form
+        id="search"
+        action="/discover"
+        role="search"
+        className="flex items-center gap-2.5 rounded-full border border-line-strong bg-card px-4"
+      >
+        <label htmlFor="q" className="sr-only">
+          Search plants
+        </label>
         <Icon name="search" size={20} className="text-ink-muted" />
         <input
           id="q"
@@ -70,13 +149,32 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Sea
           placeholder="Search plants, like basil or ugu"
           className="min-h-[48px] min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-[#8a8a86]"
         />
-        {category ? <input type="hidden" name="category" value={category} /> : null}
+        {category ? (
+          <input type="hidden" name="category" value={category} />
+        ) : null}
       </form>
 
       {cats.length ? (
-        <nav aria-label="Plant categories" className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
+        <nav
+          aria-label="Plant categories"
+          className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]"
+        >
+          {nSaved > 0 ? (
+            <Link
+              href="/discover?saved=1"
+              aria-current={showSaved ? "page" : undefined}
+              className={cn(
+                "flex min-h-[38px] flex-none items-center gap-1.5 rounded-full border px-4 text-small font-semibold",
+                showSaved
+                  ? "border-ink bg-ink text-white"
+                  : "border-line-strong bg-card",
+              )}
+            >
+              <Icon name="heart" size={15} /> Saved · {nSaved}
+            </Link>
+          ) : null}
           {[{ slug: "", name: "All" }, ...cats].map((c) => {
-            const active = (category ?? "") === c.slug;
+            const active = !showSaved && (category ?? "") === c.slug;
             const href = c.slug ? `/discover?category=${c.slug}` : "/discover";
             return (
               <Link
@@ -85,7 +183,9 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Sea
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex min-h-[38px] flex-none items-center rounded-full border px-4 text-small font-semibold",
-                  active ? "border-ink bg-ink text-white" : "border-line-strong bg-card",
+                  active
+                    ? "border-ink bg-ink text-white"
+                    : "border-line-strong bg-card",
                 )}
               >
                 {c.name}
@@ -97,8 +197,18 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Sea
 
       <section className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-lg font-bold tracking-[-0.02em]">Ready to grow</h2>
-          {plantsRes.ok ? <span className="text-small text-ink-muted">{plants.length} {plants.length === 1 ? "plant" : "plants"}</span> : null}
+          <h2 className="text-lg font-bold tracking-[-0.02em]">
+            {showSaved
+              ? "Your saved plants"
+              : q
+                ? `Results for “${q.slice(0, 40)}”`
+                : "Ready to grow"}
+          </h2>
+          {plantsRes.ok ? (
+            <span className="text-small text-ink-muted">
+              {plants.length} {plants.length === 1 ? "plant" : "plants"}
+            </span>
+          ) : null}
         </div>
         {!plantsRes.ok ? (
           <EmptyState
@@ -107,8 +217,18 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Sea
           />
         ) : plants.length === 0 ? (
           <EmptyState
-            title="No plants here yet"
-            body="We only add plants our growing experts have checked. Try another category or search."
+            title={
+              showSaved
+                ? "No saved plants yet"
+                : q
+                  ? `Nothing matches “${q.slice(0, 40)}” yet`
+                  : "No plants here yet"
+            }
+            body={
+              showSaved
+                ? "Tap the heart on any plant to keep it here."
+                : "We only add plants our growing experts have checked. Try another name, like a Yoruba, Igbo or Hausa name, or browse a category."
+            }
           />
         ) : (
           <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
@@ -119,7 +239,11 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Sea
                 title={p.commonName}
                 line={p.summaryLine}
                 badge={p.category}
-                imageUrl={p.coverPath && supabaseUrl ? publicUrl(supabaseUrl, BUCKETS.plants, p.coverPath) : null}
+                imageUrl={
+                  p.coverPath && supabaseUrl
+                    ? publicUrl(supabaseUrl, BUCKETS.plants, p.coverPath)
+                    : null
+                }
               />
             ))}
           </div>

@@ -5,8 +5,8 @@ import { SubmitButton } from "@/components/submit-button";
 import { Card, EmptyState, FormNotice, Tag } from "@/components/ui";
 import { canEditPlants, PILLARS } from "@/lib/plant-workflow";
 import { aiDraftConfigured } from "@/server/ai/plant-draft";
-import { getDraftAllStatus, listAdminPlants, plantsNeedingDraft, plantsNeedingSources, requirePlantLibrary } from "@/server/plant-admin";
-import { draftAllAction, submitAllPlantsAction } from "./actions";
+import { getDraftAllStatus, listAdminPlants, plantsNeedingCare, plantsNeedingDraft, plantsNeedingSources, requirePlantLibrary } from "@/server/plant-admin";
+import { approvePublishAllAction, draftAllAction, submitAllPlantsAction } from "./actions";
 
 export const metadata: Metadata = { title: "Plant library" };
 export const dynamic = "force-dynamic";
@@ -14,8 +14,16 @@ export const dynamic = "force-dynamic";
 export default async function AdminPlants({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string }> }) {
   const actor = await requirePlantLibrary("/admin/plants");
   const { notice, error } = await searchParams;
-  const [rows, job, needDraft, needSources] = await Promise.all([listAdminPlants(), getDraftAllStatus(), plantsNeedingDraft(), plantsNeedingSources()]);
-  const needing = [...new Map([...needDraft, ...needSources].map((p) => [p.id, p])).values()];
+  const [rows, job, needDraft, needSources, needCare] = await Promise.all([
+    listAdminPlants(),
+    getDraftAllStatus(),
+    plantsNeedingDraft(),
+    plantsNeedingSources(),
+    plantsNeedingCare(),
+  ]);
+  const needing = [...new Map([...needDraft, ...needSources, ...needCare].map((p) => [p.id, p])).values()];
+  const isOwner = actor.roles.includes("super_admin");
+  const unpublished = rows.filter((r) => r.status !== "published" && !r.isSample);
   const mayDraft = canEditPlants(actor.roles) && aiDraftConfigured();
   const live = rows.filter((r) => r.status === "published").length;
   const waiting = rows.reduce((n, r) => n + r.inReview, 0);
@@ -74,21 +82,39 @@ export default async function AdminPlants({ searchParams }: { searchParams: Prom
                 <>
                   <p className="text-small text-ink-on-black">
                     {needDraft.length ? `${needDraft.length} plant${needDraft.length === 1 ? " has" : "s have"} empty sections. ` : ""}
+                    {needCare.length ? `${needCare.length} plant${needCare.length === 1 ? " has" : "s have"} no care routine. ` : ""}
                     {needSources.length ? `${needSources.length} plant${needSources.length === 1 ? " has" : "s have"} no sources. ` : ""}
                     AI fills only what’s missing, one plant at a time, so anything you’ve written stays as it is. It suggests sources too, and keeps
                     only links that actually open. Everything goes to the expert for review.
                   </p>
                   <form action={draftAllAction}>
                     <SubmitButton variant="lime" pendingLabel="Starting…">
-                      {needDraft.length ? "Draft" : "Find sources for"} {needing.length} plant{needing.length === 1 ? "" : "s"}
+                      Fill in {needing.length} plant{needing.length === 1 ? "" : "s"} with AI
                     </SubmitButton>
                   </form>
                 </>
               ) : (
-                <p className="text-small text-ink-on-black">Every plant has all six sections started and at least one source.</p>
+                <p className="text-small text-ink-on-black">Every plant has its six sections, a care routine and at least one source.</p>
               )}
             </>
           )}
+        </Card>
+      ) : null}
+
+      {isOwner && unpublished.length && !needing.length && job.state !== "running" ? (
+        <Card className="flex flex-col gap-3 border-lemon p-5">
+          <h2 className="text-lg font-semibold">Approve and publish for launch</h2>
+          <p className="text-small text-ink-muted">
+            Approves every section and care task waiting for review on all {unpublished.length} draft plants, then puts each ready plant live. You’re signing
+            off the facts, safety and tone, so read the plants first. You can unpublish any plant later.
+          </p>
+          <form action={approvePublishAllAction} className="flex flex-col gap-3">
+            <label className="flex items-start gap-2.5 text-small">
+              <input type="checkbox" name="confirm" value="yes" required className="mt-0.5 h-5 w-5 accent-[#0A0A0A]" />
+              I’ve read these plants and they’re right for Lagos growers.
+            </label>
+            <SubmitButton pendingLabel="Approving and publishing…">Approve and publish all</SubmitButton>
+          </form>
         </Card>
       ) : null}
 

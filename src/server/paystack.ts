@@ -68,6 +68,9 @@ export const paystack = {
       `/customer/${encodeURIComponent(emailOrCode)}`,
     ),
   disableSubscription: (code: string, token: string) => call<unknown>("POST", "/subscription/disable", { code, token }),
+  /** Refunds all or part of a successful charge. Paystack processes it over minutes to days. */
+  refund: (p: { transaction: string; amount: number; merchant_note?: string; customer_note?: string }) =>
+    call<{ id: number; status: string; amount: number }>("POST", "/refund", { ...p, currency: "NGN" }),
 };
 
 /** Paystack signs webhooks with HMAC-SHA512 of the raw body using the secret key. */

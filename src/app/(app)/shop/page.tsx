@@ -2,7 +2,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { TrackEvent } from "@/components/analytics";
-import { ButtonLink, Card, EmptyState, FormNotice, HeroCard, Page, PhotoPlaceholder, Tag } from "@/components/ui";
+import { ButtonLink, Card, EmptyState, FormNotice, HeroCard, Icon, Page, PhotoPlaceholder, Tag } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/money";
 import { publicImageUrl } from "@/lib/product-admin";
@@ -14,11 +14,11 @@ import { listProductCategories, listPublishedProducts } from "@/server/catalogue
 export const metadata: Metadata = { title: "Shop" };
 export const dynamic = "force-dynamic";
 
-export default async function ShopPage({ searchParams }: { searchParams: Promise<{ category?: string; added?: string; error?: string }> }) {
-  const { category, added, error } = await searchParams;
+export default async function ShopPage({ searchParams }: { searchParams: Promise<{ category?: string; q?: string; added?: string; error?: string }> }) {
+  const { category, q, added, error } = await searchParams;
   const user = await getSessionUser();
   const inCart = await cartCount(user?.id ?? null).catch(() => 0);
-  const [productsRes, catsRes] = await Promise.all([listPublishedProducts({ category }), listProductCategories()]);
+  const [productsRes, catsRes] = await Promise.all([listPublishedProducts({ category, q }), listProductCategories()]);
   const items = productsRes.ok ? productsRes.data : [];
   const cats = catsRes.ok ? catsRes.data : [];
   const hasSamples = items.some((p) => p.isSample);
@@ -40,6 +40,20 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
           View cart · {inCart} item{inCart === 1 ? "" : "s"}
         </ButtonLink>
       ) : null}
+
+      <form action="/shop" role="search" className="flex items-center gap-2.5 rounded-full border border-line-strong bg-card px-4">
+        <label htmlFor="shop-q" className="sr-only">Search the shop</label>
+        <Icon name="search" size={20} className="text-ink-muted" />
+        <input
+          id="shop-q"
+          name="q"
+          type="search"
+          defaultValue={q}
+          placeholder="Search, like pots or basil"
+          className="min-h-[48px] min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-[#8a8a86]"
+        />
+        {category ? <input type="hidden" name="category" value={category} /> : null}
+      </form>
 
       {cats.length ? (
         <nav aria-label="Product categories" className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
@@ -65,7 +79,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
       {!productsRes.ok ? (
         <EmptyState title="We can't load the shop right now" body="Check your connection and try again in a moment." />
       ) : items.length === 0 ? (
-        <EmptyState title="Nothing here yet" body="We add new supplies often. Check back soon." />
+        <EmptyState title={q ? `Nothing matches “${q.slice(0, 40)}”` : "Nothing here yet"} body={q ? "Try another word, or browse a category." : "We add new supplies often. Check back soon."} />
       ) : (
         <ul className="flex flex-col gap-3">
           {items.map((p) => {

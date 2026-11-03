@@ -46,6 +46,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       ) : (
         <h1 className="text-title">Order {order.orderNumber}</h1>
       )}
+      {order.paymentStatus === "refunded" || order.paymentStatus === "partially_refunded" ? (
+        <p role="status" className="rounded-2xl bg-leaf-pale px-4 py-3 text-small text-leaf-ink">
+          {order.paymentStatus === "refunded" ? "This order has been refunded." : "Part of this order has been refunded."} Refunds go back to the card or account you
+          paid with; banks can take up to 10 working days to show them.
+        </p>
+      ) : null}
 
       <Card className="flex flex-col gap-3 p-5">
         <div className="flex items-center justify-between">

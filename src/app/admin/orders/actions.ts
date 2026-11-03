@@ -7,6 +7,7 @@ import { parseNairaInput } from "@/lib/product-admin";
 import { NotAllowed, WorkflowError } from "@/server/plant-admin";
 import { createPromo, setPromoActive, updateFulfilment } from "@/server/order-admin";
 import { requireShopAdmin } from "@/server/product-admin";
+import { refundOrder } from "@/server/refunds";
 
 const msg = (err: unknown) => {
   if (err instanceof NotAllowed || err instanceof WorkflowError) return err.message;
@@ -80,4 +81,24 @@ export async function togglePromoAction(form: FormData) {
   await setPromoActive(actor, z.string().uuid().parse(form.get("id")), form.get("active") === "1");
   revalidatePath("/admin/promos");
   redirect("/admin/promos");
+}
+
+export async function refundOrderAction(form: FormData) {
+  const number = z.string().regex(/^LMY-[A-Z0-9]{4}-[A-Z0-9]{4}$/).parse(form.get("number"));
+  const actor = await requireShopAdmin(`/admin/orders/${number}`);
+  let to: string;
+  try {
+    if (form.get("confirm") !== "yes") throw new WorkflowError("Tick the box to confirm the refund.");
+    const amount = parseNairaInput(String(form.get("amount") ?? "").trim());
+    if (amount === null || amount <= 0) throw new WorkflowError("Enter the refund amount in naira, like 6500.");
+    const reason = z.string().trim().min(3, "Add a short reason, like “arrived damaged”.").max(200).parse(form.get("reason"));
+    const r = await refundOrder(actor, number, { amountMinor: amount, reason, restock: form.get("restock") === "yes" });
+    const done = r.status === "succeeded" ? "Refund done." : "Refund sent to Paystack. It usually completes within a day; the customer’s bank may take up to 10 working days.";
+    to = `/admin/orders/${number}?notice=${encodeURIComponent(`${done} The customer has been emailed.`)}`;
+  } catch (err) {
+    to = `/admin/orders/${number}?error=${encodeURIComponent(msg(err))}`;
+  }
+  revalidatePath(`/admin/orders/${number}`);
+  revalidatePath("/admin/orders");
+  redirect(to);
 }

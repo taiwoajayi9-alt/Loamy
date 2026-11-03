@@ -4,7 +4,10 @@ import { notFound } from "next/navigation";
 import { TrackEvent } from "@/components/analytics";
 import { ButtonLink, EmptyState, Icon, Page, PhotoPlaceholder, Tag } from "@/components/ui";
 import { BUCKETS, publicUrl } from "@/lib/photos";
+import { getSessionUser } from "@/server/auth";
 import { getPublishedPlant, getPublishedSections } from "@/server/catalogue";
+import { isSaved } from "@/server/saved";
+import { toggleSaveAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -29,8 +32,9 @@ function SectionBody({ text }: { text: string }) {
   );
 }
 
-export default async function PlantPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function PlantPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ saved?: string }> }) {
   const { slug } = await params;
+  const { saved: justSaved } = await searchParams;
   const res = await getPublishedPlant(slug);
   if (res.ok && !res.data) notFound();
 
@@ -46,6 +50,9 @@ export default async function PlantPage({ params }: { params: Promise<{ slug: st
   const content = await getPublishedSections(plant.id);
   const sections = content.ok ? content.data.sections : [];
   const sources = content.ok ? content.data.sources : [];
+  const user = await getSessionUser().catch(() => null);
+  const saved = user ? await isSaved(user.id, plant.id) : false;
+  const heart = "flex h-11 w-11 items-center justify-center rounded-full bg-white/90";
 
   return (
     <Page className="gap-5 pt-0">
@@ -63,7 +70,24 @@ export default async function PlantPage({ params }: { params: Promise<{ slug: st
         >
           <Icon name="back" />
         </Link>
+        {user ? (
+          <form action={toggleSaveAction} className="absolute right-4 top-4">
+            <input type="hidden" name="slug" value={plant.slug} />
+            <button type="submit" aria-pressed={saved} aria-label={saved ? `Remove ${plant.commonName} from saved` : `Save ${plant.commonName}`} className={heart}>
+              <Icon name="heart" className={saved ? "fill-[#E5484D] text-[#E5484D]" : ""} />
+            </button>
+          </form>
+        ) : (
+          <Link href={`/login?next=${encodeURIComponent(`/plants/${plant.slug}`)}`} aria-label={`Sign in to save ${plant.commonName}`} className={`absolute right-4 top-4 ${heart}`}>
+            <Icon name="heart" />
+          </Link>
+        )}
       </div>
+      {justSaved === "1" ? (
+        <p role="status" className="rounded-2xl bg-leaf-pale px-4 py-3 text-small text-leaf-ink">
+          Saved. Find it any time under <Link href="/discover?saved=1" className="font-semibold underline">Saved</Link> in Discover.
+        </p>
+      ) : null}
 
       <div className="flex flex-col gap-1.5">
         <Tag className="self-start">{plant.category}</Tag>

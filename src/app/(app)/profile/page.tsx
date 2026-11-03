@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 const ROWS: Array<{ label: string; icon: IconName; colour: TileColour; href: string }> = [
   { label: "My garden", icon: "sprout", colour: "sage", href: "/garden" },
+  { label: "Saved plants", icon: "heart", colour: "peach", href: "/discover?saved=1" },
   { label: "Ask Loamy", icon: "chat", colour: "lilac", href: "/ask-loamy" },
   { label: "Orders", icon: "bag", colour: "peach", href: "/orders" },
   { label: "Membership", icon: "heart", colour: "lemon", href: "/subscribe" },
