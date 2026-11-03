@@ -66,6 +66,17 @@ export default async function GardenPlantPage({ params, searchParams }: { params
       </HeroCard>
 
       {active ? (
+        <Link href={`/ask-loamy?plant=${id}`} className="flex items-center gap-3 rounded-card border border-line bg-card p-4 hover:border-line-strong">
+          <span className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-lilac"><Icon name="chat" size={20} /></span>
+          <span className="flex-1">
+            <span className="block font-semibold">Ask Loamy about your {name.toLowerCase()}</span>
+            <span className="block text-small text-ink-muted">Yellow leaves, pests, watering, harvesting…</span>
+          </span>
+          <Icon name="chevron" size={18} />
+        </Link>
+      ) : null}
+
+      {active ? (
         <section className="flex flex-col gap-3" aria-labelledby="todo-h">
           <h2 id="todo-h" className="text-lg font-semibold">To do</h2>
           {tasks.length ? (

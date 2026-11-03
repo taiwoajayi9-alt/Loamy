@@ -121,3 +121,10 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - Plant photos: uploaded in the admin (at least 1200 px on the shorter side, 3:4 to 3:2), public bucket `plant-images`. The first is the cover on Discover, the plant page and garden cards.
 - Members' photos: private bucket `garden-photos`, stored under each member's own folder, shown only to them through signed links that expire after an hour. Their latest photo replaces the catalogue photo on their garden card.
 - No storage access rules exist for browsers; only the server (secret key) reads or writes files.
+
+## 2026-11-03 — Ask Loamy
+- Members ask questions in general or about a plant in their garden. Answers are grounded in approved plant sections and care routines (drafts excluded) plus the member's records (age, stage, space, sun, watering, recent care, tasks due).
+- Ask Loamy never claims to see or diagnose a plant (enforced in the prompt and softened after), makes no medical claims, names no prices, brands or chemicals, and suggests the Loamy team for anything serious.
+- Uses the same AI provider as drafting (DeepSeek/Gemini). 30 questions per member per Lagos day to keep costs predictable.
+- Members rate answers (helpful or not) and can send a conversation to the Loamy team; requests land in Admin → Help for support admins, plant experts and super admins. Replies happen by phone or email for now.
+- Message text is stored for the member and support only; analytics get event names and context type, never text.

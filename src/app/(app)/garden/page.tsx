@@ -69,7 +69,7 @@ export default async function GardenPage({ searchParams }: { searchParams: Promi
         <div className="mt-1 flex gap-1.5">
           <QuickAction onBlack href="/discover" icon="plus" colour="sky" label="Add plant" />
           <QuickAction onBlack href="/shop" icon="bag" colour="peach" label="Supplies" />
-          <QuickAction onBlack href="/discover" icon="search" colour="lilac" label="Explore" />
+          <QuickAction onBlack href="/ask-loamy" icon="chat" colour="lilac" label="Ask Loamy" />
           <QuickAction onBlack href="/profile" icon="user" colour="sage" label="Account" />
         </div>
       </HeroCard>

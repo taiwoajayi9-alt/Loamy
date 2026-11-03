@@ -30,7 +30,7 @@ export async function draftCareRoutine(input: PlantDraftInput & { needs?: string
 }
 
 /** Sends a prompt to whichever AI provider is configured and returns its text reply. */
-async function complete(system: string, user: string): Promise<string> {
+export async function complete(system: string, user: string): Promise<string> {
   const provider = aiDraftProvider();
   const model = process.env.AI_DRAFT_MODEL;
   if (provider === "gemini") {

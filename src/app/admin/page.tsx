@@ -5,6 +5,7 @@ import type { IconName } from "@/components/ui";
 import { canOpenPlantLibrary } from "@/lib/plant-workflow";
 import { canManageShop } from "@/lib/product-admin";
 import { requireUser } from "@/server/auth";
+import { canHelp } from "@/server/help-admin";
 import { getRoles } from "@/server/plant-admin";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ export default async function AdminHome() {
     { href: "/admin/plants", title: "Plant library", body: "Write, review and publish plant profiles.", icon: "sprout", colour: "sage", allowed: canOpenPlantLibrary(roles) },
     { href: "/admin/products", title: "Shop items", body: "Prices, stock, photos and publishing.", icon: "bag", colour: "peach", allowed: canManageShop(roles) },
     { href: "/admin/orders", title: "Orders", body: "Call customers, arrange and track delivery.", icon: "check", colour: "lemon", allowed: canManageShop(roles) },
+    { href: "/admin/help", title: "Help requests", body: "Members asking the Loamy team for help.", icon: "chat", colour: "sky", allowed: canHelp(roles) },
     { href: "/admin/promos", title: "Promo codes", body: "Create and switch off discount codes.", icon: "heart", colour: "lilac", allowed: canManageShop(roles) },
   ];
   const mine = areas.filter((a) => a.allowed);
