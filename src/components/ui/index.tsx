@@ -253,7 +253,7 @@ export function Field({
   hint,
   ...input
 }: ComponentProps<"input"> & { label: string; name: string; error?: string; hint?: string }) {
-  const id = `field-${name}`;
+  const id = input.id ?? `field-${name}`;
   const describedBy = [error ? `${id}-error` : null, hint ? `${id}-hint` : null].filter(Boolean).join(" ") || undefined;
   return (
     <div className="flex flex-col gap-2">

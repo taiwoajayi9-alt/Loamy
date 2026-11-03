@@ -59,3 +59,11 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - First shop items: 7-piece mini garden tool set and 1-gallon nursery pots (pack of 10), 10 in stock each. Seeded as drafts with no price.
 - The database refuses to publish a product variant without an admin-set price (`product_variants_published_price_check`).
 - Supplier listing photos are not used in the shop. Loamy uses its own product photos.
+
+## 2026-11-03 — Plant library workflow
+- Six sections per plant. Each goes draft → waiting for review → approved, or back with the expert's notes.
+- Editing approved text starts a new version; customers keep seeing the approved one until the new one is approved.
+- A plant goes live only when all six sections are approved and it has at least one source.
+- Roles: content_admin writes and publishes; plant_expert approves; super_admin can do both.
+- AI drafting is off until ANTHROPIC_API_KEY is set. It never overwrites approved text or text waiting for review, and drafts mentioning prices or medical claims are flagged for the reviewer.
+- Every change is written to audit_logs.

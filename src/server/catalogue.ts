@@ -1,9 +1,13 @@
 import "server-only";
-import { and, asc, eq, ilike, min, or, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, min, or, sql } from "drizzle-orm";
+import { approvedByType, PILLARS } from "@/lib/plant-workflow";
 import { db } from "@/db/client";
 import {
   inventoryRecords,
   plantCategories,
+  plantContentSections,
+  plantReferences,
+  plantSources,
   plants,
   productCategories,
   productVariants,
@@ -113,4 +117,44 @@ export function listProductCategories() {
       .where(eq(productCategories.status, "published"))
       .orderBy(asc(productCategories.sortOrder)),
   );
+}
+
+/**
+ * The approved, published sections of a plant in pillar order, with their sources.
+ * Drafts, items waiting for review and unapproved versions never reach customers.
+ */
+export function getPublishedSections(plantId: string) {
+  return load(async () => {
+    const rows = await db
+      .select({
+        id: plantContentSections.id,
+        sectionType: plantContentSections.sectionType,
+        title: plantContentSections.title,
+        body: plantContentSections.body,
+        version: plantContentSections.version,
+        status: plantContentSections.status,
+        reviewStatus: plantContentSections.reviewStatus,
+      })
+      .from(plantContentSections)
+      .where(
+        and(
+          eq(plantContentSections.plantId, plantId),
+          eq(plantContentSections.status, "published"),
+          eq(plantContentSections.reviewStatus, "approved"),
+        ),
+      );
+    const approved = approvedByType(rows);
+    const sections = PILLARS.flatMap((p) => {
+      const s = approved.get(p.type);
+      return s ? [{ ...s, label: p.label }] : [];
+    });
+    const sources = sections.length
+      ? await db
+          .selectDistinct({ title: plantSources.title, publisher: plantSources.publisher, url: plantSources.url })
+          .from(plantReferences)
+          .innerJoin(plantSources, eq(plantSources.id, plantReferences.sourceId))
+          .where(inArray(plantReferences.contentSectionId, sections.map((s) => s.id)))
+      : [];
+    return { sections, sources };
+  });
 }

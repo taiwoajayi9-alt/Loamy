@@ -25,7 +25,14 @@ export const ts = () => timestamp({ withTimezone: true });
 // ── Enums ──────────────────────────────────────────────────────
 
 export const userStatus = pgEnum("user_status", ["active", "suspended", "deletion_requested", "deleted"]);
-export const adminRole = pgEnum("admin_role", ["super_admin", "content_admin", "commerce_admin", "support_admin"]);
+export const adminRole = pgEnum("admin_role", [
+  "super_admin",
+  "content_admin",
+  "commerce_admin",
+  "support_admin",
+  /** Horticulture expert who approves plant content before it is published. */
+  "plant_expert",
+]);
 export const consentType = pgEnum("consent_type", ["terms", "privacy_notice", "analytics", "marketing", "whatsapp"]);
 export const consentStatus = pgEnum("consent_status", ["granted", "revoked"]);
 export const notificationChannel = pgEnum("notification_channel", ["in_app", "email", "whatsapp"]);
