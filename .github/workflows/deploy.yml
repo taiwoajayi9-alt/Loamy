@@ -64,7 +64,19 @@ jobs:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          mkdir -p ~/.ssh
+          # Accept the key pasted as-is, or as one line of base64 (survives copy and paste better).
+          # Windows line endings and stray spaces are removed either way.
+          if printf '%s' "$KEY" | grep -q "BEGIN"; then
+            printf '%s\n' "$KEY" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > ~/.ssh/deploy
+          else
+            printf '%s' "$KEY" | tr -d '\r\n ' | base64 -d > ~/.ssh/deploy
+          fi
+          chmod 600 ~/.ssh/deploy
+          if ! ssh-keygen -y -f ~/.ssh/deploy > /dev/null 2>&1; then
+            echo "::error::DEPLOY_SSH_KEY isn't a usable private key. On your Mac run: base64 -i ~/.ssh/loamy_deploy | pbcopy  then paste that into the secret."
+            exit 1
+          fi
           ssh-keyscan -p 21098 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
           SSH="ssh -p 21098 -i ~/.ssh/deploy -o BatchMode=yes"
           # Upload to a fresh folder, then swap it in, so the live app is never half-updated.

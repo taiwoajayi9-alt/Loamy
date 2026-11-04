@@ -46,7 +46,12 @@ echo "Open: https://github.com/taiwoajayi9-alt/Loamy/settings/secrets/actions/ne
 echo "Create these three secrets (Name, then Secret, then 'Add secret'):"
 echo "  1. DEPLOY_HOST  →  ${DEPLOY_HOST}"
 echo "  2. DEPLOY_USER  →  ${DEPLOY_USER}"
-echo "  3. DEPLOY_SSH_KEY → the private key. It's now copied to your clipboard; just paste."
-pbcopy < "$KEY" 2>/dev/null && echo "     (copied ✓)" || { echo "     Copy everything below, including the BEGIN and END lines:"; cat "$KEY"; }
+echo "  3. DEPLOY_SSH_KEY → the private key, as one long line. It's now copied to your clipboard; just paste."
+# One line of base64 survives copy and paste; the deploy decodes it.
+if base64 -i "$KEY" 2>/dev/null | tr -d '\n' | pbcopy 2>/dev/null; then
+  echo "     (copied ✓)"
+else
+  echo "     Copy this one long line:"; base64 < "$KEY" | tr -d '\n'; echo
+fi
 echo ""
 echo "When all three are added, run:  bash scripts/setup-deploy.sh check"
