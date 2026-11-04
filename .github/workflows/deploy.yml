@@ -99,15 +99,6 @@ jobs:
           echo "Health check failed. Previous version will be restored."
           exit 1
 
-      - name: Finalize successful deployment
-        if: success() && env.HAS_DEPLOY == 'true'
-        env:
-          HOST: ${{ secrets.DEPLOY_HOST }}
-          USER: ${{ secrets.DEPLOY_USER }}
-        run: |
-          ssh -p 21098 -i "$HOME/.ssh/deploy" -o BatchMode=yes "$USER@$HOST" 'cd ~/loamy-app && rm -rf app.old && rm -f app.js.old .deploy-in-progress'
-          echo "Deployment verified. Previous version safely retired."
-
       - name: Deploy landing page
         if: success() && env.HAS_DEPLOY == 'true'
         env:
@@ -121,6 +112,15 @@ jobs:
           else
             echo "Landing page directory not found; skipped."
           fi
+
+      - name: Finalize successful deployment
+        if: success() && env.HAS_DEPLOY == 'true'
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -p 21098 -i "$HOME/.ssh/deploy" -o BatchMode=yes "$USER@$HOST" 'cd ~/loamy-app && rm -rf app.old && rm -f app.js.old .deploy-in-progress'
+          echo "Deployment verified. Previous version safely retired."
 
       - name: Restore previous version after failure
         if: failure() && env.HAS_DEPLOY == 'true' && steps.configure_ssh.outcome == 'success'
