@@ -57,8 +57,24 @@ jobs:
         if: env.HAS_DEPLOY == 'true'
         env:
           KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          HOST: ${{ secrets.DEPLOY_HOST }}
+          RAW_HOST: ${{ secrets.DEPLOY_HOST }}
+          RAW_USER: ${{ secrets.DEPLOY_USER }}
         run: |
+          # Tidy the host and username in case they were pasted with extras
+          # (spaces, "ssh -p 21098 user@server", "https://", a trailing ":21098" or "/").
+          HOST=$(printf '%s' "$RAW_HOST" | tr -d '[:space:]' | sed -E 's#^ssh(-p[0-9]+)?##; s#^-p[0-9]+##; s#^[A-Za-z]+://##; s#^.*@##; s#[:/].*$##')
+          USER=$(printf '%s' "$RAW_USER" | tr -d '[:space:]' | sed -E 's#@.*$##')
+          if ! printf '%s' "$HOST" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$'; then
+            echo "::error::DEPLOY_HOST should be just the server name, like server123.web-hosting.com (cPanel → General Information → Server Name)."
+            exit 1
+          fi
+          if ! printf '%s' "$USER" | grep -Eq '^[A-Za-z0-9_.-]+$'; then
+            echo "::error::DEPLOY_USER should be just your cPanel username (cPanel → General Information → Current User)."
+            exit 1
+          fi
+          echo "::add-mask::$HOST"
+          echo "::add-mask::$USER"
+          { echo "HOST=$HOST"; echo "USER=$USER"; } >> "$GITHUB_ENV"
           mkdir -p "$HOME/.ssh"
           if printf '%s' "$KEY" | grep -q "BEGIN"; then
             printf '%s\n' "$KEY" | tr -d '\r' > "$HOME/.ssh/deploy"
@@ -70,7 +86,7 @@ jobs:
             echo "::error::DEPLOY_SSH_KEY is not a usable private key."
             exit 1
           fi
-          if ! ssh-keyscan -T 15 -p 21098 "$HOST" > "$HOME/.ssh/known_hosts"; then
+          if ! ssh-keyscan -T 15 -p 21098 -- "$HOST" > "$HOME/.ssh/known_hosts"; then
             echo "::error::Could not retrieve the Namecheap SSH host key. Check DEPLOY_HOST and SSH connectivity."
             exit 1
           fi
@@ -81,9 +97,6 @@ jobs:
 
       - name: Upload and switch application
         if: env.HAS_DEPLOY == 'true'
-        env:
-          HOST: ${{ secrets.DEPLOY_HOST }}
-          USER: ${{ secrets.DEPLOY_USER }}
         run: |
           SSH="ssh -p 21098 -i $HOME/.ssh/deploy -o BatchMode=yes"
           $SSH "$USER@$HOST" 'mkdir -p ~/loamy-app/tmp && if [ -f ~/loamy-app/.deploy-in-progress ]; then echo "An earlier deployment needs recovery. Stopping."; exit 1; fi && rm -rf ~/loamy-app/app.next && rm -f ~/loamy-app/app.js.next'
@@ -108,9 +121,6 @@ jobs:
 
       - name: Deploy landing page
         if: success() && env.HAS_DEPLOY == 'true'
-        env:
-          HOST: ${{ secrets.DEPLOY_HOST }}
-          USER: ${{ secrets.DEPLOY_USER }}
         run: |
           SSH="ssh -p 21098 -i $HOME/.ssh/deploy -o BatchMode=yes"
           if $SSH "$USER@$HOST" 'test -d ~/loamy.farm'; then
@@ -122,18 +132,12 @@ jobs:
 
       - name: Finalize successful deployment
         if: success() && env.HAS_DEPLOY == 'true'
-        env:
-          HOST: ${{ secrets.DEPLOY_HOST }}
-          USER: ${{ secrets.DEPLOY_USER }}
         run: |
           ssh -p 21098 -i "$HOME/.ssh/deploy" -o BatchMode=yes "$USER@$HOST" 'cd ~/loamy-app && rm -rf app.old && rm -f app.js.old .deploy-in-progress'
           echo "Deployment verified. Previous version safely retired."
 
       - name: Restore previous version after failure
         if: failure() && env.HAS_DEPLOY == 'true' && steps.configure_ssh.outcome == 'success'
-        env:
-          HOST: ${{ secrets.DEPLOY_HOST }}
-          USER: ${{ secrets.DEPLOY_USER }}
         continue-on-error: true
         run: |
           ssh -p 21098 -i "$HOME/.ssh/deploy" -o BatchMode=yes "$USER@$HOST" '
