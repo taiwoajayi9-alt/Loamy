@@ -70,7 +70,14 @@ jobs:
             echo "::error::DEPLOY_SSH_KEY is not a usable private key."
             exit 1
           fi
-          ssh-keyscan -p 21098 "$HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null
+          if ! ssh-keyscan -T 15 -p 21098 "$HOST" > "$HOME/.ssh/known_hosts"; then
+            echo "::error::Could not retrieve the Namecheap SSH host key. Check DEPLOY_HOST and SSH connectivity."
+            exit 1
+          fi
+          if [ ! -s "$HOME/.ssh/known_hosts" ]; then
+            echo "::error::Namecheap SSH host key was not returned."
+            exit 1
+          fi
 
       - name: Upload and switch application
         if: env.HAS_DEPLOY == 'true'
