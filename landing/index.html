@@ -67,10 +67,12 @@ header.top{position:sticky;top:0;z-index:5;background:rgba(243,243,241,.92);back
 .qa span.t{width:58px;height:58px;border-radius:999px;display:flex;align-items:center;justify-content:center;color:var(--ink)}
 .qa svg{width:24px;height:24px}
 .photo{border-radius:24px;min-height:220px;display:flex;align-items:flex-end;padding:14px;font-size:12px;color:#4d5a40;background:var(--ph-green)}
+.photo-img{display:block;width:100%;height:auto;aspect-ratio:3/2;object-fit:cover;padding:0;min-height:0}
 @media (min-width:860px){
   .hero{grid-template-columns:1.15fr .85fr;padding:56px 48px 44px;align-items:center}
   .hero h1{font-size:64px}
   .photo{min-height:360px}
+  .photo-img{min-height:360px}
 }
 
 /* sections */
@@ -156,7 +158,10 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;
       <p class="note">No account needed to explore. Works on any phone.</p>
     </div>
     <div>
-      <div class="photo" role="img" aria-label="Photo placeholder: herbs and leafy greens growing on a Lagos balcony">Photo · herbs on a Lagos balcony</div>
+      <picture>
+        <source type="image/webp" srcset="images/herbs-balcony-768.webp 768w, images/herbs-balcony.webp 1536w" sizes="(min-width:860px) 40vw, 100vw">
+        <img class="photo photo-img" src="images/herbs-balcony.jpg" width="1536" height="1024" alt="A leafy scent leaf plant in a black pot on a sunny balcony, with railings and trees behind" fetchpriority="high" decoding="async">
+      </picture>
       <nav class="qa" aria-label="Quick links" style="margin-top:16px">
         <a href="https://app.loamy.farm/discover"><span class="t" style="background:var(--lemon)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg></span>Discover</a>
         <a href="#how"><span class="t" style="background:var(--sage)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20v-8"/><path d="M12 12c0-4 3-6 7-6 0 4-3 6-7 6Z"/><path d="M12 14c0-3-2-5-6-5 0 3 2 5 6 5Z"/></svg></span>Your plan</a>
