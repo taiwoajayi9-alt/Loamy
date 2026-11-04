@@ -164,3 +164,8 @@ Data API exposes nothing to the publishable key; the app's own server is the onl
 - **Refunds:** Shop managers refund all or part of an order's item total from the order page via Paystack (delivery fee is collected separately, so not refunded here). Order row is locked while recording, so no double refunds. A full refund of an undelivered order can put items back in stock and cancels delivery. Paystack's later refund.processed / refund.failed webhooks update the record; the customer is emailed.
 
 - **Launch scope (owner decision 2026-11-04):** go live with only plants and products that are fully approved and complete; the rest stay hidden as drafts and are approved after launch.
+
+## 2026-11-04 — All 16 launch plants approved and published (owner decision)
+
+- Owner asked to approve all plants for launch. Claude, on that instruction: checked every "Good for you" section for medical or price claims (none found); added a pet/child safety line to Snake plant and Aloe vera; wrote 77 Lagos-specific care tasks for the 15 plants without a routine; attached 15 checked reference links (NIHORT production guides for ugu, amaranth, corchorus, tomato and citrus; Federal Ministry of Agriculture homestead garden manual; World Agroforestry species profiles; UF/IFAS Extension; RHS); then approved every section and care task and published all 16 plants. Every step is in audit_logs under the owner's account, marked "via Claude, on the owner's instruction".
+- No plant has growth stages yet; the app works without them. Four plants have no photo yet (Bitter leaf, Ewedu, Green amaranth, Spring onion).
