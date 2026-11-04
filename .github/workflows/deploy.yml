@@ -1,10 +1,5 @@
 name: Deploy app
 
-# Builds the standalone app and sends it to Namecheap over SSH after CI passes on main.
-# Needs repository secrets: DEPLOY_SSH_KEY, DEPLOY_HOST, DEPLOY_USER (port 21098 on Namecheap)
-# Public build settings below can be overridden with repository variables of the same name.
-# Skips quietly until the secrets are set.
-
 on:
   workflow_run:
     workflows: [CI]
@@ -23,6 +18,7 @@ jobs:
     timeout-minutes: 20
     env:
       HAS_DEPLOY: ${{ secrets.DEPLOY_SSH_KEY != '' && secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' }}
+
     steps:
       - name: Skip until deploy settings exist
         if: env.HAS_DEPLOY != 'true'
@@ -42,7 +38,6 @@ jobs:
       - name: Build
         if: env.HAS_DEPLOY == 'true'
         env:
-          # Public values (safe in the browser). Secrets stay on the server in ~/loamy-app/.env.
           NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://app.loamy.farm' }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://kimietimcjqdeomihnsw.supabase.co' }}
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_qcSDPYTQ3CuyPYMghVXgzQ_DZgR_41M' }}
@@ -57,50 +52,102 @@ jobs:
           cp deploy/app.js bundle/app.js
           du -sh bundle
 
-      - name: Send to Namecheap
+      - name: Configure SSH
+        id: configure_ssh
         if: env.HAS_DEPLOY == 'true'
         env:
           KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           HOST: ${{ secrets.DEPLOY_HOST }}
-          USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          mkdir -p ~/.ssh
-          # Accept the key pasted as-is, or as one line of base64 (survives copy and paste better).
-          # Windows line endings and stray spaces are removed either way.
+          mkdir -p "$HOME/.ssh"
           if printf '%s' "$KEY" | grep -q "BEGIN"; then
-            printf '%s\n' "$KEY" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' > ~/.ssh/deploy
+            printf '%s\n' "$KEY" | tr -d '\r' > "$HOME/.ssh/deploy"
           else
-            printf '%s' "$KEY" | tr -d '\r\n ' | base64 -d > ~/.ssh/deploy
+            printf '%s' "$KEY" | tr -d '\r\n ' | base64 --decode > "$HOME/.ssh/deploy"
           fi
-          chmod 600 ~/.ssh/deploy
-          if ! ssh-keygen -y -f ~/.ssh/deploy > /dev/null 2>&1; then
-            echo "::error::DEPLOY_SSH_KEY isn't a usable private key. On your Mac run: base64 -i ~/.ssh/loamy_deploy | pbcopy  then paste that into the secret."
+          chmod 600 "$HOME/.ssh/deploy"
+          if ! ssh-keygen -y -f "$HOME/.ssh/deploy" > /dev/null 2>&1; then
+            echo "::error::DEPLOY_SSH_KEY is not a usable private key."
             exit 1
           fi
-          ssh-keyscan -p 21098 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          SSH="ssh -p 21098 -i ~/.ssh/deploy -o BatchMode=yes"
-          # Upload to a fresh folder, then swap it in, so the live app is never half-updated.
-          $SSH "$USER@$HOST" 'mkdir -p ~/loamy-app/tmp && rm -rf ~/loamy-app/app.next'
-          rsync -az --delete -e "$SSH" bundle/app/ "$USER@$HOST:loamy-app/app.next/"
-          rsync -az -e "$SSH" bundle/app.js "$USER@$HOST:loamy-app/app.js"
-          $SSH "$USER@$HOST" 'cd ~/loamy-app && rm -rf app.old && { [ -d app ] && mv app app.old || true; } && mv app.next app && touch tmp/restart.txt && rm -rf app.old'
-          echo "App deployed."
-          # Landing page: goes to the loamy.farm folder once that domain is added in cPanel (Domains → Create a New Domain).
-          if $SSH "$USER@$HOST" 'test -d ~/loamy.farm'; then
-            rsync -az -e "$SSH" landing/ "$USER@$HOST:loamy.farm/"
-            echo "Landing page deployed to loamy.farm."
-          else
-            echo "No ~/loamy.farm folder yet; skipping the landing page."
-          fi
+          ssh-keyscan -p 21098 "$HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null
 
-      - name: Check the site responds
+      - name: Upload and switch application
         if: env.HAS_DEPLOY == 'true'
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          URL="${{ vars.NEXT_PUBLIC_SITE_URL || 'https://app.loamy.farm' }}"
+          SSH="ssh -p 21098 -i $HOME/.ssh/deploy -o BatchMode=yes"
+          $SSH "$USER@$HOST" 'mkdir -p ~/loamy-app/tmp && if [ -f ~/loamy-app/.deploy-in-progress ]; then echo "An earlier deployment needs recovery. Stopping."; exit 1; fi && rm -rf ~/loamy-app/app.next && rm -f ~/loamy-app/app.js.next'
+          rsync -az --delete -e "$SSH" bundle/app/ "$USER@$HOST:loamy-app/app.next/"
+          rsync -az -e "$SSH" bundle/app.js "$USER@$HOST:loamy-app/app.js.next"
+          $SSH "$USER@$HOST" 'cd ~/loamy-app && rm -rf app.old && rm -f app.js.old && touch .deploy-in-progress && { [ -d app ] && mv app app.old || true; } && { [ -f app.js ] && mv app.js app.js.old || true; } && mv app.next app && mv app.js.next app.js && touch tmp/restart.txt'
+          echo "New application version switched in."
+
+      - name: Check application health
+        if: env.HAS_DEPLOY == 'true'
+        env:
+          URL: ${{ vars.NEXT_PUBLIC_SITE_URL || 'https://app.loamy.farm' }}
+        run: |
           for i in 1 2 3 4 5 6; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/discover" || true)
+            code=$(curl -sSL -o /dev/null -w '%{http_code}' "$URL/discover" || true)
             echo "Attempt $i: $code"
             [ "$code" = "200" ] && exit 0
             sleep 10
           done
-          echo "The app didn't answer with 200. Check cPanel → Setup Node.js App → the app's log." && exit 1
+          echo "Health check failed. Previous version will be restored."
+          exit 1
+
+      - name: Finalize successful deployment
+        if: success() && env.HAS_DEPLOY == 'true'
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -p 21098 -i "$HOME/.ssh/deploy" -o BatchMode=yes "$USER@$HOST" 'cd ~/loamy-app && rm -rf app.old && rm -f app.js.old .deploy-in-progress'
+          echo "Deployment verified. Previous version safely retired."
+
+      - name: Deploy landing page
+        if: success() && env.HAS_DEPLOY == 'true'
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          SSH="ssh -p 21098 -i $HOME/.ssh/deploy -o BatchMode=yes"
+          if $SSH "$USER@$HOST" 'test -d ~/loamy.farm'; then
+            rsync -az -e "$SSH" landing/ "$USER@$HOST:loamy.farm/"
+            echo "Landing page deployed."
+          else
+            echo "Landing page directory not found; skipped."
+          fi
+
+      - name: Restore previous version after failure
+        if: failure() && env.HAS_DEPLOY == 'true' && steps.configure_ssh.outcome == 'success'
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        continue-on-error: true
+        run: |
+          ssh -p 21098 -i "$HOME/.ssh/deploy" -o BatchMode=yes "$USER@$HOST" '
+            cd ~/loamy-app
+            if [ -f .deploy-in-progress ]; then
+              if [ -d app.old ]; then
+                rm -rf app
+                mv app.old app
+              else
+                rm -rf app
+              fi
+              if [ -f app.js.old ]; then
+                rm -f app.js
+                mv app.js.old app.js
+              else
+                rm -f app.js
+              fi
+              rm -f .deploy-in-progress
+              touch tmp/restart.txt
+              echo "Previous application version restored."
+            else
+              echo "No incomplete application switch to roll back."
+            fi
+          '
